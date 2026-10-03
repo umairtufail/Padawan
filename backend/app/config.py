@@ -11,7 +11,10 @@ class Settings(BaseSettings):
 
     nebius_api_key: str = ""
     nebius_base_url: str = "https://api.tokenfactory.us-north1.nebius.com/v1/"
-    nebius_vlm_model: str = "zai-org/GLM-5.3-Flash"
+    nebius_vlm_model: str = "deepseek-ai/DeepSeek-V4.1-Flash"
+
+    # Skip a frame if the vision model takes longer than this (shared endpoint has slow outliers).
+    vision_timeout_s: float = 8.0
 
     supabase_url: str = ""
     supabase_service_role_key: str = ""

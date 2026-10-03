@@ -11,3 +11,10 @@ uv add <package>                  # add a dependency (updates pyproject.toml and
 
 Layout: `app/routers` (HTTP), `app/services` (vision, segmenter, question planner, synthesizer, guardrail checker, privacy, elevenlabs), `tests`.
 Config comes from the repo-root `.env` (see `../.env.example`).
+
+## API (v0)
+- `POST /v1/teach/sessions` creates a session (in memory for now).
+- `POST /v1/sessions/{id}/frames` sends one screen frame (multipart `t_ms` + `frame` JPEG) and returns structured events.
+
+Frontend guide with examples, rules and curl commands: [`docs/frontend-integration.md`](../docs/frontend-integration.md).
+Vision prompts live in `app/prompts/`; manual model tests: `uv run python -m scripts.test_vision` and `uv run python -m scripts.eval_vision`.
