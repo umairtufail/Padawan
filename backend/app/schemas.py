@@ -58,3 +58,36 @@ class FrameResponse(BaseModel):
     latency_ms: int | None = None
     # Set when the frame was not analysed. The client should just carry on with the next frame.
     skipped: SkipReason | None = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginUser(BaseModel):
+    id: str
+    name: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+    user: LoginUser
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    title: str
+    created_at: datetime
+    last_screen_summary: str = ""
+    events_count: int = 0
+
+
+class StoredEvent(Event):
+    t_ms: int = 0
+
+
+class SessionDetail(SessionSummary):
+    events: list[StoredEvent] = Field(default_factory=list)

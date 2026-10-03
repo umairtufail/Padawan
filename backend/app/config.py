@@ -18,8 +18,17 @@ class Settings(BaseSettings):
     # Skip a frame if the vision model takes longer than this (shared endpoint has slow outliers).
     vision_timeout_s: float = 8.0
 
-    # "dev": no login needed, in-memory sessions (local UI work). "supabase": real login + Supabase storage.
-    auth_mode: Literal["dev", "supabase"] = "dev"
+    # "dev": no login needed, in-memory sessions (local UI work).
+    # "admin": one hardcoded demo account (ADMIN_USER / ADMIN_PASSWORD), token issued by this backend, in-memory sessions.
+    # "supabase": real Supabase login + Supabase storage.
+    auth_mode: Literal["dev", "admin", "supabase"] = "dev"
+
+    # Demo account for AUTH_MODE=admin (and for the login page in dev mode). Override both on any public deployment.
+    admin_user: str = "admin"
+    admin_password: str = "admin"
+    # Signs the admin tokens. Empty = a random secret per process (logins reset on restart or on another instance).
+    admin_jwt_secret: str = ""
+    admin_token_ttl_s: int = 43200
 
     supabase_url: str = ""
     supabase_publishable_key: str = ""

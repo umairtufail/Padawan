@@ -61,11 +61,12 @@ cd backend && uv sync && uv run fastapi dev app/main.py
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-**Two modes**, set by `AUTH_MODE` in `.env`:
+**Three modes**, set by `AUTH_MODE` in `.env`:
 
 | Mode | Login | Data | When |
 |---|---|---|---|
 | `dev` (default) | none | in memory, lost on restart | building UI fast, no Supabase needed |
+| `admin` | demo account (default `admin` / `admin`), token from `POST /v1/auth/login` | in memory | the deployed demo until Supabase login is in the UI |
 | `supabase` | Supabase access token (Bearer) | Postgres | the real flow and the demo |
 
 The frontend developer's guide (formats, a TypeScript client, curl examples) is [`docs/frontend-integration.md`](docs/frontend-integration.md).
@@ -75,7 +76,9 @@ The frontend developer's guide (formats, a TypeScript client, curl examples) is 
 | Endpoint | What it does |
 |---|---|
 | `GET /health` | liveness |
+| `POST /v1/auth/login` | demo login (`dev` and `admin` modes), returns a Bearer token |
 | `POST /v1/teach/sessions` | create a teach session |
+| `GET /v1/sessions`, `GET /v1/sessions/{id}` | list my sessions, read one with its events |
 | `POST /v1/sessions/{id}/frames` | multipart `t_ms` + `frame` (JPEG) in, structured events out |
 
 Frames go **straight from the browser to the backend**, never through a Next.js API route (Vercel body limit 4.5 MB).
@@ -86,7 +89,8 @@ The team `.env` is committed in this private repo for the hackathon (see `AGENTS
 
 | Variable | Backend `.env` / FastAPI Cloud | Frontend `.env.local` / Vercel |
 |---|---|---|
-| `AUTH_MODE` | `dev` locally, `supabase` deployed | |
+| `AUTH_MODE` | `dev` locally, `admin` or `supabase` deployed | |
+| `ADMIN_USER`, `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET` | demo account for `admin` mode (default `admin` / `admin`; **change on a public deployment**) | |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWKS_URL` | yes (public values) | |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | | yes (public values) |
 | `NEXT_PUBLIC_API_URL` | | `http://localhost:8000` locally, the FastAPI Cloud URL deployed |

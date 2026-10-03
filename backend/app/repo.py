@@ -30,6 +30,7 @@ class SessionRecord:
     last_summary: str = ""
     description: str = ""
     language: str = "en"
+    events_count: int = 0
 
 
 class SessionRepo(Protocol):
@@ -41,6 +42,14 @@ class SessionRepo(Protocol):
         self, user: AuthUser, session_id: str, t_ms: int, summary: str, events: list[dict]
     ) -> list[int]:
         """Store the new screen summary and the events. Returns one id per event, in order."""
+        ...
+
+    async def list_sessions(self, user: AuthUser) -> list[SessionRecord]:
+        """The user's sessions, newest first, each with its events_count."""
+        ...
+
+    async def list_events(self, user: AuthUser, session_id: str, limit: int = 200) -> list[dict]:
+        """Events of one session in order, each with id, t_ms, kind, summary, entities, visible_text, salient, confidence."""
         ...
 
 
@@ -79,6 +88,18 @@ class MemoryRepo:
             self._events.append({"id": self._next_event_id, "session_id": session_id, "t_ms": t_ms, **ev})
             self._next_event_id += 1
         return ids
+
+    async def list_sessions(self, user) -> list[SessionRecord]:
+        mine = [r for r in self._sessions.values() if r.user_id == user.id]
+        for r in mine:
+            r.events_count = sum(1 for e in self._events if e["session_id"] == r.id)
+        return sorted(mine, key=lambda r: r.created_at, reverse=True)
+
+    async def list_events(self, user, session_id, limit=200) -> list[dict]:
+        rec = self._sessions.get(session_id)
+        if rec is None or rec.user_id != user.id:
+            return []
+        return [{k: v for k, v in e.items() if k != "session_id"} for e in self._events if e["session_id"] == session_id][:limit]
 
 
 # ---------------------------------------------------------------- supabase
@@ -157,6 +178,39 @@ class SupabaseRepo:
         ids, _ = await asyncio.gather(insert_events(), update_summary())
         return ids
 
+    async def list_sessions(self, user) -> list[SessionRecord]:
+        rows = await self._send(
+            "GET",
+            "/sessions?select=id,user_id,title,last_screen_summary,started_at,events(count)&order=started_at.desc&limit=100",
+            user, returning=True,
+        )
+        out = []
+        for r in rows:
+            counts = r.get("events") or [{}]
+            out.append(
+                SessionRecord(
+                    id=r["id"], user_id=r["user_id"], title=r["title"] or "",
+                    created_at=datetime.fromisoformat(r["started_at"]),
+                    last_summary=r["last_screen_summary"] or "", events_count=int(counts[0].get("count", 0)),
+                )
+            )
+        return out
+
+    async def list_events(self, user, session_id, limit=200) -> list[dict]:
+        try:
+            uuid.UUID(session_id)
+        except ValueError:
+            return []
+        rows = await self._send(
+            "GET",
+            f"/events?session_id=eq.{session_id}&select=id,t_ms,kind,summary,payload&order=id.asc&limit={int(limit)}",
+            user, returning=True,
+        )
+        return [
+            {"id": int(r["id"]), "t_ms": r["t_ms"], "kind": r["kind"], "summary": r["summary"], **(r.get("payload") or {})}
+            for r in rows
+        ]
+
 
 # ---------------------------------------------------------------- selection
 
@@ -165,9 +219,9 @@ _supabase: SupabaseRepo | None = None
 
 
 def get_repo() -> SessionRepo:
-    """Dev mode keeps everything in memory. Supabase mode stores it in Postgres."""
+    """Dev and admin modes keep everything in memory. Supabase mode stores it in Postgres."""
     global _supabase
-    if settings.auth_mode == "dev":
+    if settings.auth_mode in ("dev", "admin"):
         return _memory
     if _supabase is None:
         _supabase = SupabaseRepo(settings.supabase_url, settings.supabase_publishable_key)
