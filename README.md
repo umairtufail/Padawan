@@ -29,6 +29,12 @@ Browser (Next.js on Vercel)                       FastAPI on FastAPI Cloud      
 3. **Ask:** a pause controller decides when Yoda speaks (screen idle, expert silent, question budget left).
 4. **Map and teach:** the session becomes a Holocron, which Yoda later uses to tutor a new hire.
 
+## Architecture: what is built and what is not
+
+[![Padawan architecture: green is built, gray dashed is not built yet](docs/architecture.svg)](docs/architecture.md)
+
+Green is built and merged to `main`, gray dashed is still to build. Status table and the editable Mermaid version: [`docs/architecture.md`](docs/architecture.md).
+
 ## Repository layout
 
 ```
