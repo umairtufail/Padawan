@@ -19,6 +19,7 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-# Routers are added here as they are built (see docs and Notion page 04):
-# from .routers import sessions, skills, learn
-# app.include_router(sessions.router, prefix="/v1")
+from .routers import sessions  # noqa: E402
+
+app.include_router(sessions.router, prefix="/v1")
+# Still to come (see Notion page 04): skills, learn
