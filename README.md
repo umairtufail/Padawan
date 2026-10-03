@@ -4,7 +4,7 @@ Teach Yoda what you know. A voice agent (Yoda) watches an expert's screen, asks 
 
 ```
 frontend/   Next.js (App Router) on Vercel: dashboard, Meet-style session UI
-backend/    FastAPI on FastAPI Cloud: frames, events, steps, skill synthesis, guardrail checks
+backend/    FastAPI (managed with uv) on FastAPI Cloud: frames, events, steps, skill synthesis, guardrail checks
             backend/tests  pytest
 supabase/   SQL migrations
 packages/   shared schemas (skill, event, OpenAPI)
@@ -16,7 +16,7 @@ docs/       short notes (full docs in Notion)
 ```bash
 cp .env.example .env            # then fill in keys (never commit .env)
 # backend
-cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt && fastapi dev app/main.py
+cd backend && uv sync && uv run fastapi dev app/main.py
 # frontend (new terminal)
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
