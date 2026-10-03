@@ -7,7 +7,7 @@ import {
   API_URL, MOCK, ApiError, createTeachSession, health, listSessions, type SessionSummary,
 } from "../../lib/api";
 import { btnPrimary, Chip, ErrorBox, Label } from "../../components/ui";
-import YodaOrb from "../../components/yoda-orb";
+import YodaFigure from "../../components/yoda-figure";
 
 type Backend = "checking" | "up" | "down";
 
@@ -72,7 +72,7 @@ export default function Overview() {
       <section className="grid gap-5 md:grid-cols-2" aria-label="What would you like to do">
         <article className="flex flex-col rounded-2xl border border-jade/30 bg-surface/90 p-7">
           <div className="flex items-center gap-4">
-            <YodaOrb size={44} label="" />
+            <YodaFigure size={76} label="" />
             <Label className="!text-jade">For the Master</Label>
           </div>
           <h2 className="mt-4 font-heading text-3xl font-black text-gold">Teach Yoda</h2>

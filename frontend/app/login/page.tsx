@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ApiError, login } from "../../lib/api";
 import Logo from "../../components/logo";
-import YodaOrb from "../../components/yoda-orb";
+import YodaFigure from "../../components/yoda-figure";
 import { btnPrimary, ErrorBox, Label } from "../../components/ui";
 
 export default function LoginPage() {
@@ -35,7 +35,7 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-5 py-10">
       <div className="mb-8 flex flex-col items-center gap-5">
-        <YodaOrb size={88} />
+        <YodaFigure size={120} />
         <Logo />
       </div>
       <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border border-line bg-surface/90 p-6" noValidate>

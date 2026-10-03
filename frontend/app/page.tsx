@@ -1,6 +1,6 @@
 import { HeroCta, NavAuth } from "../components/auth-links";
 import Logo from "../components/logo";
-import YodaOrb from "../components/yoda-orb";
+import YodaFigure from "../components/yoda-figure";
 import { Label } from "../components/ui";
 
 const features = [
@@ -38,7 +38,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex justify-center">
-            <YodaOrb size={240} className="max-w-full" />
+            <YodaFigure size={380} className="max-w-full" />
           </div>
         </section>
 
@@ -74,6 +74,9 @@ export default function Home() {
 
       <footer className="border-t border-line py-6 text-center">
         <Label>Hack-Nation 07 · The AI Apprentice</Label>
+        <p className="mx-auto mt-3 max-w-2xl px-5 text-xs text-muted">
+          Themed demo, not an official product. Star Wars and Yoda are trademarks of Lucasfilm / Disney.
+        </p>
       </footer>
     </div>
   );
