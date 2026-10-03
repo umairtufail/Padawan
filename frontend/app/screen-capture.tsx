@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deliverCapturedFrame } from "../lib/frame-delivery";
+import { deliverCapturedFrame, type CapturedFramePayload } from "../lib/frame-delivery";
+import "./screen-capture.css";
 
 type CaptureStatus = "idle" | "requesting" | "sharing" | "stopped" | "error";
 
@@ -58,7 +59,18 @@ function StopIcon() {
   );
 }
 
-export default function ScreenCapture() {
+type ScreenCaptureProps = {
+  /** Called with each changed frame. Defaults to deliverCapturedFrame (console log). */
+  onFrame?: (payload: CapturedFramePayload) => Promise<void> | void;
+  /** Hide the standalone header and hero (used when embedded in the dashboard). */
+  embedded?: boolean;
+};
+
+export default function ScreenCapture({ onFrame, embedded = false }: ScreenCaptureProps = {}) {
+  const onFrameRef = useRef(onFrame);
+  useEffect(() => {
+    onFrameRef.current = onFrame;
+  }, [onFrame]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const comparisonCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -187,7 +199,7 @@ export default function ScreenCapture() {
       baselineRef.current = new Uint8ClampedArray(baseline);
       lastCaptureAtRef.current = Date.now();
 
-      await deliverCapturedFrame({
+      await (onFrameRef.current ?? deliverCapturedFrame)({
         blob,
         capturedAt: capturedAt.toISOString(),
         changedPixelRatio: ratio / 100,
@@ -275,20 +287,20 @@ export default function ScreenCapture() {
       : status === "error" ? "Needs attention" : "Ready to monitor";
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
+    <main className="app-shell" style={embedded ? { minHeight: 0, paddingBottom: 24, borderRadius: 18, paddingTop: 20 } : undefined}>
+      {!embedded && <header className="topbar">
         <a className="brand" href="#top" aria-label="FrameSignal home">
           <span className="brand-mark"><ActivityIcon /></span>
           <span>FrameSignal</span>
         </a>
         <div className="privacy-pill"><span className="privacy-dot" />Processing stays in your browser</div>
-      </header>
+      </header>}
 
-      <section className="hero" id="top">
+      {!embedded && <section className="hero" id="top">
         <div className="eyebrow"><span /> Browser screen monitor</div>
         <h1>Capture only what <em>changes.</em></h1>
         <p>Share a screen or window. FrameSignal watches locally and saves a snapshot only when the visual change crosses your threshold.</p>
-      </section>
+      </section>}
 
       <section className="workspace" aria-label="Screen monitoring workspace">
         <div className="preview-card">
