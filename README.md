@@ -1,28 +1,119 @@
 # Padawan
 
-Teach Yoda what you know. A voice agent (Yoda) watches an expert's screen, asks why at the right pause, turns the session into a Holocron (skill), and later tutors the next Padawan.
+> Teach Yoda what you know.
+
+Padawan captures what an expert really does on screen. A voice agent (**Yoda**) watches the shared screen, stays quiet while the expert works, asks *why* at the right pause, and turns the session into a **Holocron**: a skill with steps, reasons and guardrails. Later Yoda tutors the next hire (the **Padawan**) on their own screen and stops them before they break a rule.
+
+Built for the Hack-Nation 7th Global AI Hackathon, challenge 01 "The AI Apprentice" (powered by ElevenLabs). Star Wars themed (names and styling only, no official assets).
+
+| | |
+|---|---|
+| Frontend (live) | https://padawan-bay.vercel.app |
+| Backend (live) | https://padawan.fastapicloud.dev (API docs at `/docs`) |
+| Database and login | Supabase, project `reuueppvukwdiytfxezj` |
+| Tickets | [GitHub issues](https://github.com/umairtufail/Padawan/issues) |
+| Full design | Notion: **Padawan - Hack-nation 07** (pages 00 to 11) |
+
+> The deployed backend only serves new endpoints after the latest `main` is redeployed. Check `/openapi.json` to see what is live.
+
+## How it works
 
 ```
-frontend/   Next.js (App Router) on Vercel: dashboard, Meet-style session UI
-backend/    FastAPI (managed with uv) on FastAPI Cloud: frames, events, steps, skill synthesis, guardrail checks
-            backend/tests  pytest
-supabase/   SQL migrations
-packages/   shared schemas (skill, event, OpenAPI)
-docs/       short notes (full docs in Notion)
+Browser (Next.js on Vercel)                       FastAPI on FastAPI Cloud            Supabase
+  share screen, frame gate  --JPEG frame-->  /v1/sessions/{id}/frames  --(user's token)-->  sessions, events
+  Yoda voice (ElevenLabs)   <--events------   vision model (Nebius, DeepSeek V4.1 Flash)    RLS enforces owner
 ```
 
-## Run it
+1. **Capture:** the expert shares a screen. The browser sends only frames that changed.
+2. **Understand:** the backend asks a vision model what *changed* compared with the previous frame and returns structured events.
+3. **Ask:** a pause controller decides when Yoda speaks (screen idle, expert silent, question budget left).
+4. **Map and teach:** the session becomes a Holocron, which Yoda later uses to tutor a new hire.
+
+## Repository layout
+
+```
+frontend/    Next.js 16 (App Router, TypeScript): dashboard, Meet-style session UI
+backend/     FastAPI, managed with uv
+  app/routers/    HTTP endpoints
+  app/services/   vision model call (more to come: question planner, segmenter, synthesizer)
+  app/prompts/    the prompts, as editable .md files
+  app/auth.py     Supabase token check        app/repo.py   storage (memory or Supabase)
+  scripts/        manual model tests (test_vision, eval_vision)
+  tests/          pytest (+ fixtures/frames)
+supabase/    migrations (the exact SQL applied to the project) and a README
+packages/    shared schemas (placeholder)
+docs/        guides, start with frontend-integration.md
+AGENTS.md    rules for everyone working here, human or AI
+```
+
+## Quick start
+
+You need [uv](https://docs.astral.sh/uv/) (backend) and Node 20+ (frontend).
 
 ```bash
-cp .env.example .env            # then fill in keys (never commit .env)
-# backend
+cp .env.example .env                      # then fill in keys; never commit .env
+
+# backend  -> http://localhost:8000  (docs at /docs)
 cd backend && uv sync && uv run fastapi dev app/main.py
-# frontend (new terminal)
+
+# frontend -> http://localhost:3000   (second terminal)
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-## Conventions
-- Branch per task, small PRs into `main`. Protect `main`.
-- Frames go browser to the backend directly, never through Next.js API routes (Vercel 4.5 MB body limit).
-- No secrets in the frontend. Only `NEXT_PUBLIC_*` values.
-- Tests: backend in `backend/tests` (pytest), frontend next to the code.
+**Two modes**, set by `AUTH_MODE` in `.env`:
+
+| Mode | Login | Data | When |
+|---|---|---|---|
+| `dev` (default) | none | in memory, lost on restart | building UI fast, no Supabase needed |
+| `supabase` | Supabase access token (Bearer) | Postgres | the real flow and the demo |
+
+The frontend developer's guide (formats, a TypeScript client, curl examples) is [`docs/frontend-integration.md`](docs/frontend-integration.md).
+
+## API (v0)
+
+| Endpoint | What it does |
+|---|---|
+| `GET /health` | liveness |
+| `POST /v1/teach/sessions` | create a teach session |
+| `POST /v1/sessions/{id}/frames` | multipart `t_ms` + `frame` (JPEG) in, structured events out |
+
+Frames go **straight from the browser to the backend**, never through a Next.js API route (Vercel body limit 4.5 MB).
+
+## Configuration
+
+Real values live in a password manager, never in chat or git.
+
+| Variable | Backend `.env` / FastAPI Cloud | Frontend `.env.local` / Vercel |
+|---|---|---|
+| `AUTH_MODE` | `dev` locally, `supabase` deployed | |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWKS_URL` | yes (public values) | |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | | yes (public values) |
+| `NEXT_PUBLIC_API_URL` | | `http://localhost:8000` locally, the FastAPI Cloud URL deployed |
+| `NEBIUS_API_KEY` (secret), `NEBIUS_BASE_URL`, `NEBIUS_VLM_MODEL` | yes | |
+| `ELEVENLABS_API_KEY` (secret), `ELEVENLABS_*_AGENT_ID` | yes | |
+| `ALLOWED_ORIGINS` | the frontend URLs, comma separated (include the Vercel URL) | |
+| `SUPABASE_SERVICE_ROLE_KEY` | not used today | **never** |
+
+## Deploying
+- **Backend** (FastAPI Cloud): set the variables above, then `cd backend && uv run fastapi deploy`. Remember `ALLOWED_ORIGINS`, otherwise the browser is blocked by CORS.
+- **Frontend** (Vercel): connected to the repo; set the `NEXT_PUBLIC_*` variables.
+- **Supabase**: add the Vercel URL and `http://localhost:3000` as redirect URLs, and enable the login providers.
+
+## Tests
+
+```bash
+cd backend
+uv run pytest                  # offline and fast (the model is faked)
+uv run pytest -m live          # calls the real vision model
+uv run python -m scripts.eval_vision --trials 5   # does the model detect differences correctly?
+```
+
+## Status
+Working: screen frames to events (DeepSeek V4.1 Flash, about 1 to 2 s per frame), login check, per-user storage, database with row-level security.
+Not built yet: Yoda voice agents, question planner, step segmentation, skill synthesis, marketplace, learn mode. See the open issues for who is doing what.
+
+## Team
+Javier Peres, Shibu Murugan, Umair Tufail, Deepika Sahi Kandanoor.
+
+## Working together
+Read [`AGENTS.md`](AGENTS.md) before you start. Short version: one branch per task, small pull requests into `main`, no secrets in git, tests for what you change.
