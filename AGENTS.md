@@ -22,7 +22,7 @@ cd frontend && npm run lint && npm run build                    # must pass befo
 Backend dependencies are managed with **uv** (`uv add <pkg>`), never `pip install` or a `requirements.txt`.
 
 ## Hard rules
-1. **No secrets in git, ever.** `.env` and `.env.local` are ignored; keep it that way. Share keys through the password manager. Before every commit run `git diff --cached | grep -i -E "sk_|key|token|secret"` and read what matches.
+1. **Secrets: one deliberate exception.** The root `.env` is committed on purpose for the hackathon so the team can just pull it. This is only acceptable because the repo is **private** and has just the four team members. Therefore: **never make the repo public** while `.env` is in it, never commit `frontend/.env.local`, never add any other secret or personal key anywhere, and only commit `.env` changes the whole team needs (it is tracked, so your local edits show up as changes). **After the hackathon:** rotate the Nebius and ElevenLabs keys and run `git rm --cached .env` (then rewrite history if the repo will ever be shared).
 2. **The frontend only gets public values** (`NEXT_PUBLIC_*`). Never the service-role key or any API secret.
 3. **Frames go from the browser straight to the backend**, never through a Next.js API route (Vercel's 4.5 MB body limit).
 4. **Never trust a user id sent by the client.** The backend takes it from the verified token (`app/auth.py`). Data access runs as the user, so row-level security protects it. Every new table needs RLS enabled and policies written for who may read and write it.

@@ -4,10 +4,9 @@ How to run the backend locally and call it from the Next.js app. Everything here
 
 ## 1. Run the backend
 
-You need [uv](https://docs.astral.sh/uv/) and the repo-root `.env` (ask the team for the Nebius key through the password manager, never in chat or git).
+You need [uv](https://docs.astral.sh/uv/). The repo-root `.env` is already in the repo with the team keys (private repo), so after `git pull` there is nothing to fill in.
 
 ```bash
-cp .env.example .env            # first time only, then fill NEBIUS_API_KEY
 cd backend
 uv sync                         # first time only
 uv run fastapi dev app/main.py  # http://localhost:8000  (interactive docs: http://localhost:8000/docs)

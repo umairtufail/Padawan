@@ -51,7 +51,8 @@ AGENTS.md    rules for everyone working here, human or AI
 You need [uv](https://docs.astral.sh/uv/) (backend) and Node 20+ (frontend).
 
 ```bash
-cp .env.example .env                      # then fill in keys; never commit .env
+# the repo-root .env is already in the repo (team keys; the repo is private). Just pull.
+# If you ever need a fresh one: cp .env.example .env and fill it in.
 
 # backend  -> http://localhost:8000  (docs at /docs)
 cd backend && uv sync && uv run fastapi dev app/main.py
@@ -81,7 +82,7 @@ Frames go **straight from the browser to the backend**, never through a Next.js 
 
 ## Configuration
 
-Real values live in a password manager, never in chat or git.
+The team `.env` is committed in this private repo for the hackathon (see `AGENTS.md`, rule 1). Never share it outside the four team members and never make the repo public.
 
 | Variable | Backend `.env` / FastAPI Cloud | Frontend `.env.local` / Vercel |
 |---|---|---|

@@ -1,4 +1,5 @@
-# secrets
+# secrets. NOTE: the root .env is force-added and tracked on purpose for the hackathon (private repo).
+# Everything else secret stays ignored. See AGENTS.md rule 1.
 .env
 .env.*
 !.env.example
