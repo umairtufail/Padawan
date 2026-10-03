@@ -35,6 +35,7 @@ Backend dependencies are managed with **uv** (`uv add <pkg>`), never `pip instal
 - A slow, failed or unparseable model call must never break the stream: return `skipped` and carry on. One vision call in flight per session; extra frames are skipped, not queued.
 - **Changing a prompt?** Run `uv run python -m scripts.eval_vision --trials 5` before and after, and paste both results in the PR. Model speed and quality on the shared Nebius endpoint vary a lot between calls.
 - Default vision model: `deepseek-ai/DeepSeek-V4.1-Flash` (`NEBIUS_VLM_MODEL`). `zai-org/GLM-5.3-Flash` is the fallback and needs thinking turned off (already handled in `services/vision.py`).
+- **Never deploy with `AUTH_MODE=dev`** (no login). The default is `admin`; on any public deployment also set a non-default `ADMIN_PASSWORD` and a fixed `ADMIN_JWT_SECRET` (see `docs/deployment.md`). The backend logs `SECURITY:` warnings at startup for risky settings.
 - Tests must not call external services unless marked `live`. Fake the model and Supabase (see `tests/`).
 
 ## Frontend notes

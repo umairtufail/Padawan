@@ -131,3 +131,21 @@ async def test_secret_falls_back_to_random_when_unset(monkeypatch):
     t, _ = auth.issue_admin_token()
     assert auth._verify_admin_token(t).id == "admin"
     assert len(auth._fallback_secret) >= 32
+
+
+def test_default_mode_is_closed_not_open(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.delenv("AUTH_MODE", raising=False)
+    assert Settings(_env_file=None).auth_mode == "admin"  # a deploy that forgets AUTH_MODE is protected
+
+
+def test_security_warnings():
+    from app.config import Settings, security_warnings
+
+    base = dict(_env_file=None)
+    assert any("NO login" in w for w in security_warnings(Settings(auth_mode="dev", **base)))
+    w = security_warnings(Settings(auth_mode="admin", admin_password="admin", admin_jwt_secret="", **base))
+    assert any("default 'admin'" in x for x in w) and any("ADMIN_JWT_SECRET" in x for x in w)
+    assert security_warnings(Settings(auth_mode="admin", admin_password="a-real-one", admin_jwt_secret="s" * 40, **base)) == []
+    assert security_warnings(Settings(auth_mode="supabase", **base)) == []

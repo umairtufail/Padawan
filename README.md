@@ -89,7 +89,7 @@ The team `.env` is committed in this private repo for the hackathon (see `AGENTS
 
 | Variable | Backend `.env` / FastAPI Cloud | Frontend `.env.local` / Vercel |
 |---|---|---|
-| `AUTH_MODE` | `dev` locally, `admin` or `supabase` deployed | |
+| `AUTH_MODE` | `dev` locally, `admin` or `supabase` deployed (unset = `admin`, so a forgotten setting is closed) | |
 | `ADMIN_USER`, `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET` | demo account for `admin` mode (default `admin` / `admin`; **change on a public deployment**) | |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWKS_URL` | yes (public values) | |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | | yes (public values) |
@@ -100,6 +100,8 @@ The team `.env` is committed in this private repo for the hackathon (see `AGENTS
 | `SUPABASE_SERVICE_ROLE_KEY` | not used today | **never** |
 
 ## Deploying
+Full guide with the exact variables for FastAPI Cloud and Vercel, a verification checklist and troubleshooting: [`docs/deployment.md`](docs/deployment.md). **Never deploy with `AUTH_MODE=dev`**, it needs no login.
+
 - **Backend** (FastAPI Cloud): set the variables above, then `cd backend && uv run fastapi deploy`. Remember `ALLOWED_ORIGINS`, otherwise the browser is blocked by CORS.
 - **Frontend** (Vercel): connected to the repo; set the `NEXT_PUBLIC_*` variables.
 - **Supabase**: add the Vercel URL and `http://localhost:3000` as redirect URLs, and enable the login providers.
