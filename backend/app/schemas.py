@@ -15,8 +15,8 @@ class SessionCreate(BaseModel):
 class SessionOut(BaseModel):
     session_id: str
     title: str
-    description: str
-    language: str
+    description: str = ""  # echoed from the request, not stored yet
+    language: str = "en"
     created_at: datetime
 
 
@@ -46,7 +46,7 @@ class StepUpdate(BaseModel):
     status: Literal["open", "closed"] = "open"
 
 
-SkipReason = Literal["busy", "timeout", "vision_error", "parse_error"]
+SkipReason = Literal["busy", "timeout", "vision_error", "parse_error", "storage_error"]
 
 
 class FrameResponse(BaseModel):

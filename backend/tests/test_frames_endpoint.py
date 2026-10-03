@@ -8,14 +8,18 @@ from app.config import settings
 from app.main import app
 from app.routers.sessions import get_vision
 from app.services.vision import VisionResult
-from app.state import store
+from app.repo import _memory as store
+from app.routers import sessions as sessions_router
 
 FRAME = (Path(__file__).parent / "fixtures" / "frames" / "01_erp_cost_center_4711.jpg").read_bytes()
 
 
 @pytest.fixture(autouse=True)
-def _clean():
+def _clean(monkeypatch):
+    monkeypatch.setattr(settings, "auth_mode", "dev")  # dev mode: no login, in-memory repo
     store.clear()
+    sessions_router._locks.clear()
+    sessions_router._summaries.clear()
     yield
     app.dependency_overrides.clear()
     store.clear()
@@ -146,3 +150,45 @@ async def test_malformed_event_is_dropped_others_kept():
         sid = await new_session(c)
         r = await send(c, sid)
     assert [e["summary"] for e in r.json()["events"]] == ["ok"]
+
+
+async def test_storage_failure_is_skipped_and_state_unchanged():
+    from app.repo import MemoryRepo, RepoError, get_repo
+
+    class FlakyRepo(MemoryRepo):
+        fail = True
+
+        async def save_frame_result(self, *a, **k):
+            if self.fail:
+                raise RepoError("db down")
+            return await super().save_frame_result(*a, **k)
+
+    repo = FlakyRepo()
+    app.dependency_overrides[get_repo] = lambda: repo
+    seen: list = []
+    use(fake([ok("state A"), ok("state B")], seen))
+    async with client() as c:
+        sid = await new_session(c)
+        r1 = await send(c, sid, 1)
+        repo.fail = False
+        await send(c, sid, 2)
+    assert r1.json()["skipped"] == "storage_error"
+    assert seen == ["", ""]  # nothing was stored, so the second frame still compares against the empty state
+
+
+async def test_other_users_session_is_404(monkeypatch):
+    from app.auth import AuthUser, current_user
+
+    async def alice():
+        return AuthUser("alice")
+
+    async def bob():
+        return AuthUser("bob")
+
+    use(fake([ok("x")]))
+    async with client() as c:
+        app.dependency_overrides[current_user] = alice
+        sid = await new_session(c)
+        app.dependency_overrides[current_user] = bob
+        r = await send(c, sid)
+    assert r.status_code == 404

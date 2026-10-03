@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +18,11 @@ class Settings(BaseSettings):
     # Skip a frame if the vision model takes longer than this (shared endpoint has slow outliers).
     vision_timeout_s: float = 8.0
 
+    # "dev": no login needed, in-memory sessions (local UI work). "supabase": real login + Supabase storage.
+    auth_mode: Literal["dev", "supabase"] = "dev"
+
     supabase_url: str = ""
+    supabase_publishable_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwks_url: str = ""
 

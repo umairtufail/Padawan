@@ -25,9 +25,28 @@ cp .env.example .env.local      # NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install && npm run dev      # http://localhost:3000
 ```
 
-**Auth is a dev stub for now.** No token is needed; every request is the same dev user. Real Supabase JWT checking comes later, so already send `Authorization: Bearer <supabase access token>` if you have one. It is ignored today.
+### Two modes (`AUTH_MODE` in the repo-root `.env`)
 
-**Sessions live in memory.** Restarting the backend forgets them (you will get a 404 on the next frame, just create a new session).
+| Mode | Login needed? | Where data lives | Use it for |
+|---|---|---|---|
+| `dev` (default) | No. Every request is one "dev user". | In memory, lost on restart | Building UI quickly, no Supabase account needed |
+| `supabase` | Yes, a Supabase access token | Postgres (tables `sessions`, `events`) | The real flow and the demo |
+
+Switch by editing `AUTH_MODE` in `.env` and restarting the backend. In `supabase` mode the backend also needs `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (both public values, already in `.env.example`).
+
+**Sending the token.** After the user logs in with Supabase, send their access token on every call:
+
+```ts
+const { data } = await supabase.auth.getSession();
+const token = data.session?.access_token;   // get it right before each call, supabase-js refreshes it
+fetch(`${API}/v1/...`, { headers: { Authorization: `Bearer ${token}` } });
+```
+
+The guide's client below already takes an optional `token`. In `dev` mode it is simply ignored, so you can write the code once.
+
+**What the backend does with the token.** It checks the signature, expiry, audience and issuer against the project's public keys, and uses the user id inside it. It never trusts a user id sent in the body. A missing, expired or invalid token returns `401`. A session that belongs to someone else returns `404`.
+
+**Sessions survive restarts in `supabase` mode** and are stored per user. In `dev` mode they live in memory.
 
 ## 3. The two endpoints
 
@@ -62,8 +81,8 @@ npm install && npm run dev      # http://localhost:3000
 
 - `events` is empty when nothing changed. That is normal and common.
 - `question_candidates` and `step_update` are always empty for now (coming next). Keep them in your types.
-- **`skipped`** is `null` when the frame was analysed. Otherwise it is one of `busy`, `timeout`, `vision_error`, `parse_error`. Just carry on with the next frame, nothing to retry and nothing to show the user.
-- Errors: `404` unknown session, `400` empty frame, `413` frame over 4 MB.
+- **`skipped`** is `null` when the frame was analysed. Otherwise it is one of `busy`, `timeout`, `vision_error`, `parse_error`, `storage_error`. Just carry on with the next frame, nothing to retry and nothing to show the user.
+- Errors: `401` missing or invalid token (supabase mode), `404` unknown session or someone else's, `400` empty frame, `413` frame over 4 MB, `502` storage unavailable.
 
 ## 4. Rules for the browser
 
@@ -85,7 +104,7 @@ export type FrameResponse = {
   t_ms: number; screen_summary: string; events: PadawanEvent[];
   question_candidates: unknown[]; step_update: unknown | null;
   latency_ms: number | null;
-  skipped: "busy" | "timeout" | "vision_error" | "parse_error" | null;
+  skipped: "busy" | "timeout" | "vision_error" | "parse_error" | "storage_error" | null;
 };
 
 export async function createTeachSession(title: string, token?: string) {
