@@ -107,3 +107,38 @@ async def test_no_token_raises_repo_error():
     repo, _ = repo_with(lambda r: httpx.Response(200, json=[]))
     with pytest.raises(RepoError):
         await repo.get_session(AuthUser("dev-user"), SID)
+
+
+async def test_list_sessions_reads_embedded_event_counts():
+    def h(req):
+        assert req.method == "GET" and req.url.path == "/rest/v1/sessions"
+        assert "events(count)" in str(req.url) and "order=started_at.desc" in str(req.url)
+        return httpx.Response(200, json=[
+            {"id": SID, "user_id": USER.id, "title": "A", "last_screen_summary": "s", "started_at": "2026-10-03T21:00:00+00:00", "events": [{"count": 3}]},
+            {"id": "33333333-3333-3333-3333-333333333333", "user_id": USER.id, "title": None, "last_screen_summary": None, "started_at": "2026-10-03T20:00:00+00:00", "events": []},
+        ])
+
+    repo, _ = repo_with(h)
+    rows = await repo.list_sessions(USER)
+    assert [r.events_count for r in rows] == [3, 0]
+    assert rows[1].title == "" and rows[1].last_summary == ""
+
+
+async def test_list_events_flattens_payload():
+    def h(req):
+        assert req.url.path == "/rest/v1/events" and f"session_id=eq.{SID}" in str(req.url) and "order=id.asc" in str(req.url)
+        return httpx.Response(200, json=[
+            {"id": 7, "t_ms": 3000, "kind": "change", "summary": "x", "payload": {"entities": {"to": "0400"}, "salient": True, "confidence": 0.9, "visible_text": []}},
+            {"id": 8, "t_ms": 4000, "kind": "read", "summary": "y", "payload": None},
+        ])
+
+    repo, _ = repo_with(h)
+    rows = await repo.list_events(USER, SID)
+    assert rows[0]["entities"] == {"to": "0400"} and rows[0]["salient"] is True and rows[0]["t_ms"] == 3000
+    assert rows[1] == {"id": 8, "t_ms": 4000, "kind": "read", "summary": "y"}
+
+
+async def test_list_events_bad_session_id_makes_no_request():
+    repo, seen = repo_with(lambda r: httpx.Response(200, json=[]))
+    assert await repo.list_events(USER, "nope") == []
+    assert seen == []

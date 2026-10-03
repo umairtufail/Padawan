@@ -24,14 +24,15 @@ cp .env.example .env.local      # NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install && npm run dev      # http://localhost:3000
 ```
 
-### Two modes (`AUTH_MODE` in the repo-root `.env`)
+### Three modes (`AUTH_MODE` in the repo-root `.env`)
 
 | Mode | Login needed? | Where data lives | Use it for |
 |---|---|---|---|
 | `dev` (default) | No. Every request is one "dev user". | In memory, lost on restart | Building UI quickly, no Supabase account needed |
+| `admin` | Yes, log in with the demo account (default `admin` / `admin`) through `POST /v1/auth/login`, then send the returned token | In memory, lost on restart | The deployed demo until Supabase login is wired in the UI |
 | `supabase` | Yes, a Supabase access token | Postgres (tables `sessions`, `events`) | The real flow and the demo |
 
-Switch by editing `AUTH_MODE` in `.env` and restarting the backend. In `supabase` mode the backend also needs `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (both public values, already in `.env.example`).
+Switch by editing `AUTH_MODE` in `.env` and restarting the backend. The login endpoint below works in `dev` and `admin` modes (in `dev` the token is accepted but not required), so one frontend login flow covers both. In `supabase` mode the backend also needs `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (both public values, already in `.env.example`).
 
 **Sending the token.** After the user logs in with Supabase, send their access token on every call:
 
@@ -47,7 +48,16 @@ The guide's client below already takes an optional `token`. In `dev` mode it is 
 
 **Sessions survive restarts in `supabase` mode** and are stored per user. In `dev` mode they live in memory.
 
-## 3. The two endpoints
+### Demo login (`dev` and `admin` modes)
+`POST /v1/auth/login` with JSON `{"username": "admin", "password": "admin"}` returns:
+
+```json
+{"access_token": "<jwt>", "token_type": "bearer", "expires_in": 43200, "user": {"id": "admin", "name": "Admin"}}
+```
+
+Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token as `Authorization: Bearer <access_token>` on every other call (`/health` and the login itself are public). The account comes from `ADMIN_USER` and `ADMIN_PASSWORD` in the backend environment; **change both on any public deployment**, because the defaults are guessable. In `supabase` mode this endpoint returns 404.
+
+## 3. The endpoints
 
 ### Create a teach session
 `POST /v1/teach/sessions` with JSON `{"title": "...", "description": "", "language": "en"}`, returns `201`:
@@ -55,6 +65,10 @@ The guide's client below already takes an optional `token`. In `dev` mode it is 
 ```json
 {"session_id": "0b3cc50a-...", "title": "Process supplier invoices", "description": "", "language": "en", "created_at": "2026-10-03T21:00:00Z"}
 ```
+
+### List and read sessions
+- `GET /v1/sessions` returns the caller's sessions, newest first: `[{"session_id", "title", "created_at", "last_screen_summary", "events_count"}]`.
+- `GET /v1/sessions/{session_id}` returns the same fields plus `events`: `[{"id", "t_ms", "kind", "summary", "entities", "visible_text", "salient", "confidence"}]` in order (up to 200). `404` for an unknown session or someone else's.
 
 ### Send a screen frame
 `POST /v1/sessions/{session_id}/frames`, **multipart form** with `t_ms` (milliseconds since the session started) and `frame` (a JPEG).

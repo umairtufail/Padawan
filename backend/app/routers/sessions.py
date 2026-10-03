@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from ..auth import AuthUser, current_user
 from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
-from ..schemas import Event, FrameResponse, SessionCreate, SessionOut
+from ..schemas import Event, FrameResponse, SessionCreate, SessionDetail, SessionOut, SessionSummary, StoredEvent
 from ..services import vision
 
 log = logging.getLogger("padawan.sessions")
@@ -39,6 +39,46 @@ async def create_teach_session(
         raise HTTPException(502, "storage unavailable")
     return SessionOut(
         session_id=s.id, title=s.title, description=s.description, language=s.language, created_at=s.created_at
+    )
+
+
+@router.get("/sessions", response_model=list[SessionSummary])
+async def list_sessions(user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)) -> list[SessionSummary]:
+    try:
+        rows = await repo.list_sessions(user)
+    except RepoError:
+        log.exception("could not list sessions")
+        raise HTTPException(502, "storage unavailable")
+    return [
+        SessionSummary(
+            session_id=r.id, title=r.title, created_at=r.created_at,
+            last_screen_summary=_summaries.get(r.id, r.last_summary), events_count=r.events_count,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/sessions/{session_id}", response_model=SessionDetail)
+async def get_session(
+    session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
+) -> SessionDetail:
+    try:
+        rec = await repo.get_session(user, session_id)
+        if rec is None:
+            raise HTTPException(404, "session not found")
+        raw_events = await repo.list_events(user, session_id)
+    except RepoError:
+        log.exception("could not load session")
+        raise HTTPException(502, "storage unavailable")
+    events: list[StoredEvent] = []
+    for raw in raw_events:
+        try:
+            events.append(StoredEvent(**raw))
+        except Exception:
+            continue
+    return SessionDetail(
+        session_id=rec.id, title=rec.title, created_at=rec.created_at,
+        last_screen_summary=_summaries.get(rec.id, rec.last_summary), events_count=len(events), events=events,
     )
 
 
