@@ -18,10 +18,11 @@ class Settings(BaseSettings):
     # Skip a frame if the vision model takes longer than this (shared endpoint has slow outliers).
     vision_timeout_s: float = 8.0
 
-    # "dev": no login needed, in-memory sessions (local UI work).
+    # Default is "admin" so a deployment that forgets to set AUTH_MODE is closed, not open.
+    # "dev": no login needed, in-memory sessions (local UI work only, never deploy this).
     # "admin": one hardcoded demo account (ADMIN_USER / ADMIN_PASSWORD), token issued by this backend, in-memory sessions.
     # "supabase": real Supabase login + Supabase storage.
-    auth_mode: Literal["dev", "admin", "supabase"] = "dev"
+    auth_mode: Literal["dev", "admin", "supabase"] = "admin"
 
     # Demo account for AUTH_MODE=admin (and for the login page in dev mode). Override both on any public deployment.
     admin_user: str = "admin"
@@ -39,3 +40,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def security_warnings(cfg: Settings) -> list[str]:
+    """Things that make a deployment unsafe. Logged loudly at startup."""
+    out = []
+    if cfg.auth_mode == "dev":
+        out.append("AUTH_MODE=dev: the API needs NO login. Fine locally, never on a public deployment.")
+    if cfg.auth_mode == "admin":
+        if cfg.admin_password == "admin":
+            out.append("ADMIN_PASSWORD is still the default 'admin': anyone can log in. Set your own.")
+        if not cfg.admin_jwt_secret:
+            out.append("ADMIN_JWT_SECRET is empty: a random secret is used, logins reset on restart or on another instance.")
+    return out

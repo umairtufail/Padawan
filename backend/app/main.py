@@ -1,7 +1,13 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
+from .config import security_warnings, settings
+
+log = logging.getLogger("padawan")
+for _w in security_warnings(settings):
+    log.warning("SECURITY: %s", _w)
 
 app = FastAPI(title="Padawan API", version="0.1.0")
 
