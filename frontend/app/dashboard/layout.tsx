@@ -12,6 +12,7 @@ const nav = [
   { href: "/dashboard", label: "Overview", exact: true },
   { href: "/dashboard/teach", label: "Teach Yoda", exact: false },
   { href: "/dashboard/skills", label: "Jedi Archives", exact: false },
+  { href: "/dashboard/learning", label: "My learning", exact: false },
   { href: "/dashboard/capture", label: "Capture", exact: false },
 ] as const;
 

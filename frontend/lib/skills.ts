@@ -56,6 +56,10 @@ export type SkillSummary = {
   guardrails_count: number;
   created_at: string;
   published_at: string | null;
+  /** How many learn sessions started on this skill. Only a count: who learned it is never exposed. */
+  learners_count: number;
+  /** Average mastery score (0 to 100) of finished lessons, null while nobody has finished one. */
+  avg_mastery: number | null;
 };
 
 /** GET /v1/skills/{id}: the summary plus the skill JSON (null if it was never synthesized) and the SKILL.md. */
@@ -72,18 +76,24 @@ export function toSummary(d: SkillDetail): SkillSummary {
   return {
     id: d.id, title: d.title, description: d.description, domain: d.domain, language: d.language,
     status: d.status, author: d.author, steps_count: d.steps_count, guardrails_count: d.guardrails_count,
-    created_at: d.created_at, published_at: d.published_at,
+    created_at: d.created_at, published_at: d.published_at, learners_count: d.learners_count, avg_mastery: d.avg_mastery,
   };
 }
 
 /** Builds a SkillDetail (as the backend returns it) from a skill JSON. Used by the mock API. */
 export function detailFromSkill(
   json: SkillJson,
-  extra: { status: SkillStatus; domain: string | null; published_at: string | null },
+  extra: {
+    status: SkillStatus;
+    domain: string | null;
+    published_at: string | null;
+    learners_count?: number;
+    avg_mastery?: number | null;
+  },
 ): SkillDetail {
   return {
     id: json.id, title: json.title, description: json.description, language: json.language,
-    author: json.author, created_at: json.created_at, ...extra,
+    author: json.author, created_at: json.created_at, learners_count: 0, avg_mastery: null, ...extra,
     steps_count: json.steps.length, guardrails_count: countGuardrails(json),
     skill: json, skill_md: skillToMarkdown(json),
   };
@@ -107,6 +117,61 @@ export function filterSkills(skills: SkillSummary[], query: string): SkillSummar
     const hay = `${s.title} ${s.description} ${s.domain ?? ""} ${s.author.name}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
+}
+
+export type SkillSort = "newest" | "popular" | "mastery";
+
+export const SORT_OPTIONS: { value: SkillSort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "popular", label: "Most learned" },
+  { value: "mastery", label: "Best mastery" },
+];
+
+const when = (s: Pick<SkillSummary, "published_at" | "created_at">) => s.published_at ?? s.created_at;
+
+/** Same ordering as GET /v1/skills?sort=. Returns a new array. Ties fall back to newest first. */
+export function sortSkills(skills: SkillSummary[], sort: SkillSort): SkillSummary[] {
+  const newest = (a: SkillSummary, b: SkillSummary) => when(b).localeCompare(when(a));
+  const byMastery = (a: SkillSummary, b: SkillSummary) => (b.avg_mastery ?? -1) - (a.avg_mastery ?? -1);
+  const byLearners = (a: SkillSummary, b: SkillSummary) => b.learners_count - a.learners_count;
+  const cmp =
+    sort === "popular"
+      ? (a: SkillSummary, b: SkillSummary) => byLearners(a, b) || byMastery(a, b) || newest(a, b)
+      : sort === "mastery"
+        ? (a: SkillSummary, b: SkillSummary) => byMastery(a, b) || byLearners(a, b) || newest(a, b)
+        : newest;
+  return [...skills].sort(cmp);
+}
+
+export type DomainOption = { domain: string; count: number };
+
+/** Domains present in the data with how many Holocrons each has: biggest first, then A to Z. Blank domains are skipped. */
+export function domainOptions(skills: Pick<SkillSummary, "domain">[]): DomainOption[] {
+  const counts = new Map<string, number>();
+  for (const s of skills) {
+    const d = s.domain?.trim();
+    if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([domain, count]) => ({ domain, count }))
+    .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
+}
+
+/** Keeps only one domain. null or empty means all. */
+export function filterByDomain<T extends Pick<SkillSummary, "domain">>(skills: T[], domain: string | null): T[] {
+  return domain ? skills.filter((s) => s.domain === domain) : skills;
+}
+
+/** "1 learner", "12 learners", or null when nobody learned it yet (the UI hides the stat then). */
+export function learnersLabel(count: number | null | undefined): string | null {
+  if (!count || count < 1 || !Number.isFinite(count)) return null;
+  return `${count} ${count === 1 ? "learner" : "learners"}`;
+}
+
+/** "72% avg mastery", or null for null, 0 or invalid (hidden in the UI). */
+export function masteryLabel(avg: number | null | undefined): string | null {
+  if (avg === null || avg === undefined || !Number.isFinite(avg) || avg <= 0) return null;
+  return `${Math.round(Math.min(100, avg))}% avg mastery`;
 }
 
 export type WorkMapNode = {

@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { formatTimestamp } from "../lib/skills";
 import { btnGhost, btnPrimary, Chip, ErrorBox } from "./ui";
-import { formatDate, StatusChip, useSkill } from "./skill-parts";
+import { formatDate, SkillStats, StatusChip, UnpublishControl, useIsMine, useSkill } from "./skill-parts";
 
 /** Modal shown over the Archives grid (intercepting route). Direct links get the full page instead. */
 export default function SkillPopup() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { skill, error, notFound } = useSkill(id);
+  const { skill, setSkill, error, notFound } = useSkill(id);
+  const isMine = useIsMine(id);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -69,10 +70,7 @@ export default function SkillPopup() {
           {skill && (
             <>
               <p className="text-fg">{skill.description}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Chip tone="muted">{skill.steps_count} steps</Chip>
-                <Chip tone="danger">{skill.guardrails_count} guardrails</Chip>
-              </div>
+              <div className="mt-3"><SkillStats skill={skill} /></div>
               <h3 className="mt-5 font-mono text-xs uppercase tracking-widest text-muted">Steps</h3>
               <ol className="mt-2 space-y-2">
                 {steps.map((s) => (
@@ -99,8 +97,9 @@ export default function SkillPopup() {
             <a href={`/dashboard/skills/${encodeURIComponent(skill.id)}`} className={btnGhost}>
               Open the full Holocron
             </a>
+            {skill.status === "published" && isMine && <UnpublishControl skillId={skill.id} onDone={setSkill} />}
             {skill.status === "published" && (
-              <Link href={`/dashboard/learn/${encodeURIComponent(skill.id)}`} className={btnPrimary}>
+              <Link href={`/dashboard/learn/${encodeURIComponent(skill.id)}`} className={`${btnPrimary} !px-6 !py-3 !text-base`}>
                 Start learning
               </Link>
             )}
