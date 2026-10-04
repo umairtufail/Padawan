@@ -7,6 +7,8 @@
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 export const MOCK = process.env.NEXT_PUBLIC_API_MOCK === "1";
 
+import { AUTH_MODE, supabase } from "./supabase";
+
 const TOKEN_KEY = "padawan_token";
 const USER_KEY = "padawan_user";
 const MOCK_KEY = "padawan_mock_sessions";
@@ -94,8 +96,7 @@ export function getUserName(): string | null {
   }
 }
 
-/** Clears the stored session. Pass redirectTo to also leave the page (hard navigation). */
-export function logout(redirectTo?: string) {
+function clearStored() {
   if (!hasStorage()) return;
   try {
     window.localStorage.removeItem(TOKEN_KEY);
@@ -103,6 +104,42 @@ export function logout(redirectTo?: string) {
   } catch {
     /* storage blocked: nothing to clear */
   }
+}
+
+/** Keeps the token where the rest of the app reads it (a sync read, see lib/use-token.ts). */
+export function setSession(token: string, name: string) {
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    window.localStorage.setItem(USER_KEY, name);
+  } catch {
+    throw new ApiError(0, "Browser storage is blocked, cannot keep you signed in");
+  }
+}
+
+/**
+ * Supabase mode: make sure the stored token is the current one. supabase-js renews the access token
+ * (valid about an hour) when it is about to expire, so asking it before each call is enough.
+ */
+export async function syncSupabaseToken(): Promise<void> {
+  if (AUTH_MODE !== "supabase" || MOCK || !hasStorage()) return;
+  const { data } = await supabase().auth.getSession();
+  const session = data.session;
+  if (session) setSession(session.access_token, session.user.email ?? "User");
+  else clearStored();
+}
+
+/** Email and password sign-in with Supabase Auth. Accounts are created by the team in the Supabase dashboard. */
+export async function loginWithSupabase(email: string, password: string): Promise<void> {
+  const { data, error } = await supabase().auth.signInWithPassword({ email, password });
+  if (error || !data.session) throw new ApiError(401, error?.message ?? "Sign in failed");
+  setSession(data.session.access_token, data.session.user.email ?? email);
+}
+
+/** Clears the stored session. Pass redirectTo to also leave the page (hard navigation). */
+export function logout(redirectTo?: string) {
+  if (!hasStorage()) return;
+  if (AUTH_MODE === "supabase" && !MOCK) void supabase().auth.signOut();
+  clearStored();
   if (redirectTo) window.location.assign(redirectTo);
 }
 
@@ -115,6 +152,7 @@ function handleUnauthorized() {
 async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: boolean } = {}): Promise<T> {
   const auth = opts.auth !== false;
   const headers = new Headers(init.headers);
+  if (auth) await syncSupabaseToken();
   const token = getToken();
   if (auth && token) headers.set("Authorization", `Bearer ${token}`);
 
@@ -243,12 +281,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       { auth: false },
     );
   }
-  try {
-    window.localStorage.setItem(TOKEN_KEY, data.access_token);
-    window.localStorage.setItem(USER_KEY, data.user.name);
-  } catch {
-    throw new ApiError(0, "Browser storage is blocked, cannot keep you signed in");
-  }
+  setSession(data.access_token, data.user.name);
   return data;
 }
 

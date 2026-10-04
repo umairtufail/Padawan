@@ -7,7 +7,7 @@ Next.js 16 (App Router, React 19, Tailwind 4). Yoda is the AI; the expert is the
 | Route | Access | What |
 |---|---|---|
 | `/` | public | Landing page |
-| `/login` | public | Sign in (demo: `admin` / `admin`, checked by the backend) |
+| `/login` | public | Sign in: demo `admin` / `admin` (checked by the backend), or email and password with Supabase when `NEXT_PUBLIC_AUTH_MODE=supabase` |
 | `/dashboard` | token | Overview: Teach Yoda, status strip, My sessions |
 | `/dashboard/teach` | token | Name the task and press start: the browser asks for the screen, the session is created and recording is already running on the next page |
 | `/dashboard/teach/[id]` | token | Live session: recorder, what Yoda sees now, the frame timeline, all events (polled every 3 s) |
@@ -29,6 +29,7 @@ Copy `.env.example` to `.env.local`.
 
 - `NEXT_PUBLIC_API_URL` backend base URL (default `http://localhost:8000`)
 - `NEXT_PUBLIC_API_MOCK=1` fake data, no backend needed
+- `NEXT_PUBLIC_AUTH_MODE` `admin` (default: the backend's demo account) or `supabase` (real accounts, email and password, see `../docs/supabase-login.md`). Needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public values) and a backend running with `AUTH_MODE=supabase`.
 
 ## Run
 
