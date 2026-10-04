@@ -3,7 +3,7 @@ import { applyVerdict, initialLearnState } from "./learn";
 import { buildReport, judgePrediction, newMockLearn, recordVerdict, scriptedVerdict } from "./learn-mock";
 import { seedSkills } from "./skills-mock";
 
-const skill = seedSkills().find((s) => s.id === "skill-invoices")!;
+const skill = seedSkills().find((s) => s.id === "skill-invoices")!.skill!;
 
 describe("scripted verdicts", () => {
   it("runs ok, ok, warn, STOP (kept through unchecked frames), cleared, then moves on, through the real reducer", () => {

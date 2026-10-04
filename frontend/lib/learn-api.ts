@@ -28,8 +28,8 @@ function mockSession(id: string): MockLearn {
 export async function createLearnSession(skillId: string): Promise<LearnSessionOut> {
   if (MOCK) {
     await sleep(250);
-    const skill = await getSkill(skillId);
-    if (skill.steps.length === 0) throw new ApiError(409, "this skill has no steps");
+    const skill = (await getSkill(skillId)).skill;
+    if (!skill || skill.steps.length === 0) throw new ApiError(409, "this skill has no steps");
     const id = `mock-learn-${Math.random().toString(36).slice(2, 8)}`;
     const m = newMockLearn(skill);
     mockStore().set(id, m);
@@ -68,7 +68,7 @@ export async function recordPrediction(sessionId: string, stepIdx: number, predi
     const replay = { step_idx: step.idx, t_ms: step.screen_moment.t_ms, description: step.screen_moment.description, keyframe_path: null };
     return {
       step_idx: stepIdx, predicted, resolved: true,
-      result: { step_idx: stepIdx, predicted, correct, judged_by: "heuristic", expected: step.decision.summary, reason: step.reason.text, reason_quote: step.reason.quote, replay },
+      result: { step_idx: stepIdx, predicted, correct, judged_by: "heuristic", expected: step.decision.summary, reason: step.reason?.text ?? null, reason_quote: step.reason?.quote ?? null, replay },
     };
   }
   return request(`/v1/learn/sessions/${enc(sessionId)}/predictions`, {

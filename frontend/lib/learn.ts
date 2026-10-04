@@ -81,7 +81,7 @@ export type MasteryReport = {
 
 /** The banner already says "Wait."; the model's reason often starts with it too. */
 export function stripWait(text: string): string {
-  return text.replace(/^\s*wait[.,!]?\s*/i, "").replace(/^./, (c) => c.toUpperCase());
+  return text.replace(/^\s*(?:wait|stop)[.,!]?\s*/i, "").replace(/^./, (c) => c.toUpperCase());
 }
 
 export type Banner = { kind: "stop" | "warn"; verdict: GuardrailVerdict };

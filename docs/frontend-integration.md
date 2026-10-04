@@ -307,7 +307,7 @@ The contract in sections 3 and 3b is what `frontend/lib/api.ts` implements (no a
 - **Finish session** calls `finish`, keeps the result in `sessionStorage`, and opens `/dashboard/teach/[id]/debrief`.
 - **Debrief**: the voice session (`mode=debrief`) starts by itself, Yoda asks the gaps aloud and explains the process back, and `submit_teachback` (or the mock "yes, exactly" button) calls `teachback`, then the page opens the new draft at `/dashboard/skills/[id]`, which has the Publish button. Typed answers are an accessibility fallback (no microphone, or the connection failed). At least 3 gap answers (or all, if fewer) are required before the teach-back.
 - **Archives** use `GET /v1/skills` (published) and `?mine=true` ("My Holocrons", drafts included). A `SkillDetail` has the skill JSON under `skill` (can be `null`); `reason` can be `null`, guardrails have `source`.
-- Keyframe images are not shown yet: a step shows the timestamp and `screen_moment.description`. "Start learning" links to `/dashboard/learn/{id}`, which is not built yet.
+- Keyframe images are not shown yet: a step shows the timestamp and `screen_moment.description`. "Start learning" links to `/dashboard/learn/{id}` (see section 10, "The learn page").
 
 Optional backend settings for the question planner and synthesizer (all have defaults): `NEBIUS_TEXT_MODEL` (empty = same as `NEBIUS_VLM_MODEL`), `PLANNER_TIMEOUT_S` (5), `SYNTHESIS_TIMEOUT_S` (60), `SEGMENTER_EVERY_EVENTS` (10), `SEGMENTER_EVERY_S` (20).
 
@@ -346,6 +346,9 @@ Computed deterministically from stored data; only `summary` (2 to 3 sentences in
 
 ### Voice: tutor variables
 `POST /v1/voice/sessions` with `mode: "tutor"` and a **learn** session id now fills the tutor's variables from the skill: `skill_md` (the SKILL.md) and `expert` (the author's name), plus new `skill_steps`, `skill_guardrails`, `current_step` (for example `1. Code the invoice`) and `current_step_idx`. The original three (`task_title`, `skill_md`, `expert`) keep their meaning; for a session that is not a learn session every variable keeps a placeholder (`(no skill loaded)`, `the Master`, `(none)`, `0`). The tutor prompt uses the new variables: **re-run `uv run python -m scripts.setup_voice_agents` to push the updated prompt** to ElevenLabs.
+
+### The learn page (`/dashboard/learn/[id]`, id = skill id)
+"Begin the lesson" asks for the screen share (a user click is needed), creates the learn session, and Yoda's tutor voice starts by itself. Frames go through `useFrameBuffer(..., { send: sendLearnFrame })` to `/v1/learn/sessions/{id}/frames`. `lib/learn.ts` holds the pure logic (`applyVerdict`, the `[INTERVENE]`/`[WARN]`/`[STEP]`/`[REPORT]` messages), `lib/learn-api.ts` the calls. Yoda speaks everything (tutor prompt commands `[START]`, `[STEP]`, `[REPORT]`, `[WARN]`, `[INTERVENE]`; re-run `setup_voice_agents` after pulling); captions only show what was said. The tools run in the page: `record_prediction` (resolves at once and answers Yoda), `show_replay` (opens the Master's moment drawer), `finish_learning` (shows the report). The report is shown on the same page, not a sub-route. With `NEXT_PUBLIC_API_MOCK=1` the whole flow is scripted (verdicts ok, ok, warn, stop, all-clear, a scripted Yoda voice, a mock report).
 
 ### Types
 

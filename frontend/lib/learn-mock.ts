@@ -50,7 +50,7 @@ export function scriptedVerdict(m: MockLearn, frameNo: number): GuardrailVerdict
     const g = s.guardrails[0];
     return {
       ...okVerdict(s.idx, s.title), verdict: "warn", guardrail_id: g?.id ?? null, rule: g?.rule ?? s.title,
-      expert_quote: g?.quote ?? s.reason.quote, reason: s.reason.text, confidence: 0.6, replay: moment(s),
+      expert_quote: g?.quote ?? s.reason?.quote ?? "", reason: s.reason?.text ?? "Slow down and check this step.", confidence: 0.6, replay: moment(s),
     };
   }
   if (frameNo === 4) {
@@ -58,7 +58,7 @@ export function scriptedVerdict(m: MockLearn, frameNo: number): GuardrailVerdict
     const g = s.guardrails[0];
     return {
       ...okVerdict(s.idx, s.title), verdict: "stop", guardrail_id: g?.id ?? null, rule: g?.rule ?? s.decision.summary,
-      expert_quote: g?.quote ?? s.reason.quote, reason: `Wait. ${s.reason.text}`, confidence: 0.95, replay: moment(s),
+      expert_quote: g?.quote ?? s.reason?.quote ?? "", reason: `Wait. ${s.reason?.text ?? s.decision.summary}`, confidence: 0.95, replay: moment(s),
     };
   }
   // Frames 5 and 6 are "no new check" (checked: false), which must not clear the banner; frame 7 is the all-clear.
@@ -123,7 +123,7 @@ export function buildReport(m: MockLearn, sessionId: string, summary: string): M
       if (r.predicted_right === false) bits.push("Your prediction did not match the Master's decision.");
       if (r.interventions) bits.push(`Yoda had to stop you ${r.interventions} time(s).`);
       if (r.warnings) bits.push(`Yoda warned you ${r.warnings} time(s).`);
-      bits.push(`The Master's reason: ${st.reason.text}`);
+      if (st.reason) bits.push(`The Master's reason: ${st.reason.text}`);
       return { step_idx: r.step_idx, title: r.title, why: bits.join(" "), guardrail_id: st.guardrails[0]?.id ?? null, rule: st.guardrails[0]?.rule ?? null };
     });
   const preds = [...m.predictions.values()];

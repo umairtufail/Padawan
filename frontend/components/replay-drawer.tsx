@@ -67,10 +67,14 @@ export default function ReplayDrawer({ step, momentMs, momentText, onClose }: Pr
 
         <section aria-label="Reason">
           <Label className="!text-jade">Why, in his words</Label>
-          <blockquote className="mt-2 border-l-2 border-jade/60 pl-4">
-            <p className="font-heading text-lg italic text-fg">&ldquo;{step.reason.quote}&rdquo;</p>
-            <p className="mt-1 text-sm text-muted">{step.reason.text}</p>
-          </blockquote>
+          {step.reason ? (
+            <blockquote className="mt-2 border-l-2 border-jade/60 pl-4">
+              <p className="font-heading text-lg italic text-fg">&ldquo;{step.reason.quote}&rdquo;</p>
+              <p className="mt-1 text-sm text-muted">{step.reason.text}</p>
+            </blockquote>
+          ) : (
+            <p className="mt-1 text-sm text-muted">The Master gave no reason for this step.</p>
+          )}
         </section>
 
         <section aria-label="Guardrails">

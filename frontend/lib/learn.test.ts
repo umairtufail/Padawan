@@ -67,6 +67,7 @@ describe("applyVerdict", () => {
 describe("stripWait", () => {
   it("drops a leading Wait so the banner does not say it twice", () => {
     expect(stripWait("Wait. Equipment is capex.")).toBe("Equipment is capex.");
+    expect(stripWait("Stop. It is capex.")).toBe("It is capex.");
     expect(stripWait("It is capex.")).toBe("It is capex.");
   });
 });
@@ -100,8 +101,8 @@ describe("predictions and replay", () => {
     expect(predictionSentence({ ...result, correct: false, reason_quote: null }).startsWith("Not quite.")).toBe(true);
   });
   const step = (idx: number): SkillStep => ({
-    idx, title: `S${idx}`, screen_moment: { t_ms: idx * 1000, description: "moment" }, decision: { type: "routine", summary: "d" },
-    reason: { text: "t", quote: "q", t_ms: 1 }, guardrails: [],
+    idx, title: `S${idx}`, screen_moment: { t_ms: idx * 1000, keyframe_path: null, description: "moment" }, decision: { type: "routine", summary: "d" },
+    reason: { text: "t", quote: "q", t_ms: 1 }, guardrails: [], predict_prompt: null,
   });
   it("finds the Master's moment for a step", () => {
     expect(replayForStep({ steps: [step(1), step(2)] }, 2)?.moment).toEqual({ step_idx: 2, t_ms: 2000, description: "moment", keyframe_path: null });
