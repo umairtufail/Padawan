@@ -41,7 +41,7 @@ Backend dependencies are managed with **uv** (`uv add <pkg>`), never `pip instal
 ## Frontend notes
 - `frontend/AGENTS.md` applies there: this is a recent Next.js with breaking changes. Read the guides in `frontend/node_modules/next/dist/docs/` before writing code.
 - Call the backend through one typed client (see `docs/frontend-integration.md`), send `Authorization: Bearer <access_token>` (get it with `supabase.auth.getSession()` right before each call), and treat `skipped` in a frame response as normal.
-- Branding: Star Wars themed, **Yoda is the AI**. The expert is "the Master", the new hire "the Padawan", a skill "a Holocron", the marketplace "the Jedi Archives". Use names and our own styling only. **No official logos, film stills, character art, music or the real voice** (trademarks). Yoda's way of speaking (object first, verb later, see `backend/app/prompts/*.system.md`) is fine; do not paste film quotes.
+- Branding: Star Wars themed, **Yoda is the AI**. The expert is "the Master", the new hire "the Padawan", a skill "a Holocron", the marketplace "the Jedi Archives". Use names and our own styling only. **No official logos, film stills, character art, music or the real voice** (trademarks). Yoda speaks plain, correct English in a calm, wise tone (no inverted word order, see `backend/app/prompts/*.system.md`); do not paste film quotes.
 
 ## Working with git
 - One branch per task (`feature/<short-name>`), small pull requests into `main`. No force-push to shared branches. Do not push straight to `main` once it is protected.
