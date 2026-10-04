@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_jwks_url: str = ""
 
-    allowed_origins: str = "http://localhost:3000"
+    allowed_origins: str = "http://localhost:3000,https://padawan-bay.vercel.app"
 
 
 settings = Settings()
