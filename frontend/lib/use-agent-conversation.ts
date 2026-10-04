@@ -16,7 +16,7 @@ export type VoiceToolHandlers = {
   set_off_record?: (a: { on: boolean }) => void;
   submit_teachback?: (a: { confirmed: boolean; corrections?: string }) => void;
   /** Return a sentence saying whether the prediction was right. */
-  record_prediction?: (a: { step_idx: number; predicted: string }) => string;
+  record_prediction?: (a: { step_idx: number; predicted: string }) => string | Promise<string>;
   show_replay?: (a: { step_idx: number }) => void;
   finish_learning?: () => void;
 };
@@ -119,7 +119,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
 
   /** Runs a client tool call (from ElevenLabs or from the mock). */
   const runTool = useCallback(
-    (name: string, args: Record<string, unknown>): string | void => {
+    (name: string, args: Record<string, unknown>): string | Promise<string> | void => {
       logTool(name, args);
       const t = toolsRef.current ?? {};
       switch (name) {
@@ -175,9 +175,11 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       if (!alive.current) return;
       if (MOCK) {
         setStatus("connected");
-        addCaption("yoda", mode === "debrief"
-          ? "Mock mode: Yoda is ready for the debrief. Ask him the open questions one by one."
-          : "Mock mode: Yoda is listening and stays silent until he is asked something.");
+        if (mode !== "tutor") {
+          addCaption("yoda", mode === "debrief"
+            ? "Mock mode: Yoda is ready for the debrief. Ask him the open questions one by one."
+            : "Mock mode: Yoda is listening and stays silent until he is asked something.");
+        }
         return;
       }
       const { Conversation } = await import("@elevenlabs/client");
@@ -291,6 +293,32 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
     [status, later, addCaption],
   );
 
+  /**
+   * Makes Yoda say something by voice: `command` is the user message the tutor prompt understands ([START], [STEP],
+   * [INTERVENE]...). In mock mode a scripted Yoda "speaks" `mockSay` (captions only ever show what is said) and may
+   * then call a client tool, so the learn flow can be run without ElevenLabs.
+   */
+  const tell = useCallback(
+    (command: string, mockSay?: { text: string; tool?: { name: string; args: Record<string, unknown>; afterMs?: number } }) => {
+      if (status !== "connected") return false;
+      if (!MOCK) {
+        conv.current?.sendUserMessage(command);
+        return true;
+      }
+      if (!mockSay) return true;
+      const speakMs = Math.min(6000, 600 + mockSay.text.split(/\s+/).length * 220);
+      later(() => {
+        setAgentSpeaking(true);
+        addCaption("yoda", mockSay.text);
+      }, 300);
+      later(() => setAgentSpeaking(false), 300 + speakMs);
+      const tool = mockSay.tool;
+      if (tool) later(() => void runTool(tool.name, tool.args), 300 + speakMs + (tool.afterMs ?? 1200));
+      return true;
+    },
+    [status, later, addCaption, runTool],
+  );
+
   useEffect(() => {
     alive.current = true;
     const pending = timers.current;
@@ -305,7 +333,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
 
   return {
     status, error, captions, toolEvents, agentSpeaking, micOn, awaitingAnswer,
-    start, stop, setMic, sendContext, ask, sendMessage, simulateExpertLine,
+    start, stop, setMic, sendContext, ask, sendMessage, simulateExpertLine, tell,
     /** Mock mode only: lets the page type a fake expert line. */
     mock: MOCK,
   };

@@ -39,6 +39,8 @@ type Options = {
   onSettled?: () => void;
   /** Called with every analysed frame response (question candidates, events, screen summary). */
   onResponse?: (res: FrameResponse) => void;
+  /** Where frames go. Defaults to the teach endpoint; learn mode passes its own (lib/learn-api.ts). */
+  send?: (sessionId: string, tMs: number, frame: Blob) => Promise<FrameResponse>;
 };
 
 const MAX_WIDTH = 1024;
@@ -70,7 +72,7 @@ async function downscale(blob: Blob): Promise<Blob> {
  * (which analyses one frame at a time), and every item keeps its capture time and the model's description.
  * `items` is oldest first.
  */
-export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 80, onSettled, onResponse }: Options = {}) {
+export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 80, onSettled, onResponse, send = sendFrame }: Options = {}) {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const queue = useRef<string[]>([]);
   const blobs = useRef(new Map<string, Blob>());
@@ -107,7 +109,7 @@ export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 
           try {
             const jpeg = await downscale(blob);
             const tMs = Math.max(0, takenAtMs - (startedAt.current ?? takenAtMs));
-            const res = await sendFrame(sessionId, tMs, jpeg);
+            const res = await send(sessionId, tMs, jpeg);
             const tries = (attempts.current.get(id) ?? 0) + 1;
             attempts.current.set(id, tries);
             if (res.skipped && reasons.current.get(id) === "initial" && TRANSIENT.has(res.skipped) && tries <= INITIAL_RETRIES) {
@@ -140,7 +142,7 @@ export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 
     } finally {
       busy.current = false;
     }
-  }, [patch, sessionId]);
+  }, [patch, sessionId, send]);
 
   const push = useCallback(
     (payload: CapturedFramePayload) => {
