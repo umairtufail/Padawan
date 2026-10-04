@@ -232,6 +232,7 @@ export default function TeachSessionPage() {
 
       <ScreenCapture
         embedded
+        onStopped={() => void convo.stop()}
         showCaptures={false}
         initialStream={initialStream}
         onFrame={pushFrame}
