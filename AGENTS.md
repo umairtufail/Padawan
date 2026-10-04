@@ -47,6 +47,7 @@ Backend dependencies are managed with **uv** (`uv add <pkg>`), never `pip instal
 - One branch per task (`feature/<short-name>`), small pull requests into `main`. No force-push to shared branches. Do not push straight to `main` once it is protected.
 - Commit messages: say what and why in the first line, details below. AI-assisted commits keep their `Co-Authored-By` trailer.
 - Before opening a PR: tests and lint pass, no secrets staged, docs updated if you changed an endpoint, a command or a variable.
+- CI (`.github/workflows/ci.yml`) must be green before merging. When two PRs touch the same files, re-run the tests on `main` after the second merge (each can be green alone and broken together).
 - Touching the same files as someone else? Say so in the issue first. Shared hot spots: `backend/app/main.py`, `backend/app/schemas.py`, `frontend/app/layout.tsx`, `supabase/migrations/`.
 
 ## Working in parallel (people and agents)
@@ -54,7 +55,7 @@ Split independent tasks (different files, no shared state) across people or suba
 
 ## Definition of done
 - It works end to end, not only in a unit test (run it, call it, look at the result).
-- Tests added or updated, all green. Lint and build pass.
+- Tests added or updated, all green. Lint and build pass, and CI is green on the PR.
 - No secrets, no leftover test data in Supabase (clean up users and rows you create for testing).
 - The ticket is updated with what is done and what is left.
 
