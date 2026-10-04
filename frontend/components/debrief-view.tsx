@@ -158,14 +158,7 @@ export default function DebriefView({ id }: { id: string }) {
   const answerSummaries = gaps.filter((g) => answers[g.id]).map((g) => ({ gap: g, summary: answers[g.id].text }));
   const summary = useMemo(() => buildTeachbackSummary(steps, answerSummaries), [steps, answerSummaries]);
 
-  // The voice session opens by itself: the Finish click is the user gesture that allows audio and the microphone.
-  const startedRef = useRef(false);
-  useEffect(() => {
-    if (!data || startedRef.current) return;
-    startedRef.current = true;
-    void convo.start();
-  }, [data, convo]);
-
+  // The voice debrief is opt-in: the session has ended, nothing keeps listening until the Master presses Start.
   // Typing is only the accessibility fallback: when the voice session or the microphone is not available.
   const [typing, setTyping] = useState(false);
   // A connection that hangs (microphone prompt ignored or blocked) also opens the fallback after a while.
@@ -175,7 +168,7 @@ export default function DebriefView({ id }: { id: string }) {
     const t = window.setTimeout(() => setStuck(true), 15_000);
     return () => window.clearTimeout(t);
   }, [convo.status]);
-  const typingOn = typing || convo.status === "error" || stuck;
+  const typingOn = typing || convo.status === "idle" || convo.status === "error" || stuck;
 
   // Once connected Yoda leads. Real voice: he gets the gaps and the process, and the interviewer prompt makes him
   // ask every gap and then explain it back. Mock voice: a scripted Yoda "speaks" the same things as timed captions.
