@@ -65,6 +65,43 @@ Project Settings, Environment Variables. Set each for **Production and Preview**
 
 (The Supabase `NEXT_PUBLIC_*` variables are only needed once the Supabase login is wired into the UI.)
 
+## Live deployment status (update this as you go)
+
+Last checked: 2026-10-04 (from outside, no login). Tick a box when you have done it and write the date next to it. Values for the secrets are on the private Notion page "Keys and environment values (team only)"; never put a key value in this file (the repo is public). Ticket: #81.
+
+**What was verified from outside**
+- [x] Backend `https://padawan.fastapicloud.dev` is live, in Supabase mode (admin login disabled), answers 401 without a token, serves the latest endpoints (learn, voice, keyframes, skills).
+- [x] CORS allows `https://padawan-bay.vercel.app` by default (PR #68).
+- [x] Frontend is live with email login and sign-up, but it is an **old build** (last successful Vercel build is around PR #61); every later commit hit the Vercel free-plan build rate limit.
+- [x] Supabase: sign-ups on and Confirm email on.
+
+**FastAPI Cloud variables** (Settings, Environment)
+- [ ] `AUTH_MODE=supabase`
+- [ ] `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWKS_URL`
+- [ ] `NEBIUS_API_KEY` (secret), `NEBIUS_BASE_URL`, `NEBIUS_VLM_MODEL`
+- [ ] `ELEVENLABS_API_KEY` (secret), `ELEVENLABS_INTERVIEWER_AGENT_ID`, `ELEVENLABS_TUTOR_AGENT_ID`
+- [ ] Optional: `NEBIUS_TEXT_MODEL` (for example `zai-org/GLM-5.3`)
+
+**Vercel** (Production and Preview)
+- [ ] `NEXT_PUBLIC_AUTH_MODE=supabase`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_URL`
+- [ ] A new build deployed from the latest `main` (needs the rate limit to lift, an upgrade, or the owner redeploying)
+
+**Supabase dashboard**
+- [ ] Site URL = the Vercel URL; redirect URLs include the Vercel URL and `http://localhost:3000`
+- [ ] Optional: leaked password protection (security advisor warning)
+
+**Security**
+- [ ] Nebius key rotated (new key in FastAPI Cloud and Notion, old one deleted)
+- [ ] ElevenLabs key rotated (same)
+
+**Live test after deploying** (write the result and the date)
+- [ ] Sign up and sign in on the Vercel URL
+- [ ] Record a session: frames analysed (Nebius key works)
+- [ ] Yoda speaks and hears with a real microphone (ElevenLabs variables work)
+- [ ] Finish, debrief, teach-back: a Holocron with an AI-written name appears
+- [ ] Rows exist in Supabase: `sessions`, `events`, `steps_draft`, `skills`
+- [ ] A second account finds the Holocron in the Archives and learns it
+
 ## Check it works
 
 ```bash
