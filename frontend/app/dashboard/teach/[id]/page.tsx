@@ -80,6 +80,13 @@ export default function TeachSessionPage() {
   );
   const convo = useAgentConversation({ sessionId: id, mode: "capture", tools });
   const speech = useExpertSpeech(convo.status === "connected", convo.mock);
+  // Yoda talks by voice from the first second: the person just clicked Start, so the browser allows audio and the mic.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || !initialStream || convo.status !== "idle") return;
+    autoStarted.current = true;
+    void convo.start();
+  }, [initialStream, convo]);
   const lastFrameChangeAt = items.length ? items[items.length - 1].takenAt.getTime() : null;
   const pause = usePauseController({
     lastFrameChangeAt,
