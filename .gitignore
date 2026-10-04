@@ -27,3 +27,4 @@ __pycache__/
 # local artifacts
 *.log
 .vercel/
+.claude/worktrees/
