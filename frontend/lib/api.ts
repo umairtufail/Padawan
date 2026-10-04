@@ -433,6 +433,7 @@ export async function exportSkill(id: string): Promise<string> {
     return skillToMarkdown(mockFindSkill(id));
   }
   return request(`/v1/skills/${encodeURIComponent(id)}/export`, {}, { text: true });
+}
 
 // ---------- voice (Yoda) ----------
 
