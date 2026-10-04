@@ -7,23 +7,30 @@ export type SkillStatus = "draft" | "published";
 
 export type SkillGuardrail = {
   id: string;
-  type: string; // limit | stop_and_ask | ...
+  type: string; // limit | exception | stop_and_ask
   rule: string;
+  /** Verbatim from the transcript. Empty when the guardrail came from the teach-back. */
   quote: string;
-  t_ms: number;
+  /** null for teach-back guardrails. */
+  t_ms: number | null;
+  source: "expert" | "teachback";
 };
+
+export type SkillReason = { text: string; quote: string; t_ms: number };
 
 export type SkillStep = {
   idx: number;
   title: string;
-  screen_moment: { t_ms: number; keyframe_path?: string | null; description: string };
-  decision: { type: string; summary: string }; // routine | judgment | ...
-  reason: { text: string; quote: string; t_ms: number };
+  screen_moment: { t_ms: number; keyframe_path: string | null; description: string };
+  decision: { type: string; summary: string }; // routine | judgment
+  /** null when the expert never gave a reason (the backend never invents one). */
+  reason: SkillReason | null;
   guardrails: SkillGuardrail[];
-  predict_prompt?: string;
+  /** Set only on judgment steps. */
+  predict_prompt: string | null;
 };
 
-/** The skill JSON from the contract. */
+/** The skill JSON from the contract (Notion page 03). */
 export type SkillJson = {
   id: string;
   title: string;
@@ -33,10 +40,10 @@ export type SkillJson = {
   language: string;
   steps: SkillStep[];
   global_guardrails: SkillGuardrail[];
-  teachback?: { confirmed: boolean; corrections: string[] };
+  teachback: { confirmed: boolean; corrections: string[] };
 };
 
-/** Row shape of GET /v1/skills (the `skills` table columns, with the author resolved). */
+/** One row of GET /v1/skills. */
 export type SkillSummary = {
   id: string;
   title: string;
@@ -51,25 +58,34 @@ export type SkillSummary = {
   published_at: string | null;
 };
 
-/** GET /v1/skills/{id}: the skill JSON plus the table fields that are not part of it. */
-export type SkillDetail = SkillJson & {
-  status: SkillStatus;
-  domain: string | null;
-  steps_count: number;
-  guardrails_count: number;
-  published_at: string | null;
+/** GET /v1/skills/{id}: the summary plus the skill JSON (null if it was never synthesized) and the SKILL.md. */
+export type SkillDetail = SkillSummary & {
+  skill: SkillJson | null;
+  skill_md: string | null;
 };
 
 export function countGuardrails(skill: Pick<SkillJson, "steps" | "global_guardrails">): number {
   return skill.steps.reduce((n, s) => n + s.guardrails.length, 0) + skill.global_guardrails.length;
 }
 
-export function toSummary(skill: SkillDetail): SkillSummary {
+export function toSummary(d: SkillDetail): SkillSummary {
   return {
-    id: skill.id, title: skill.title, description: skill.description, domain: skill.domain,
-    language: skill.language, status: skill.status, author: skill.author,
-    steps_count: skill.steps.length, guardrails_count: countGuardrails(skill),
-    created_at: skill.created_at, published_at: skill.published_at,
+    id: d.id, title: d.title, description: d.description, domain: d.domain, language: d.language,
+    status: d.status, author: d.author, steps_count: d.steps_count, guardrails_count: d.guardrails_count,
+    created_at: d.created_at, published_at: d.published_at,
+  };
+}
+
+/** Builds a SkillDetail (as the backend returns it) from a skill JSON. Used by the mock API. */
+export function detailFromSkill(
+  json: SkillJson,
+  extra: { status: SkillStatus; domain: string | null; published_at: string | null },
+): SkillDetail {
+  return {
+    id: json.id, title: json.title, description: json.description, language: json.language,
+    author: json.author, created_at: json.created_at, ...extra,
+    steps_count: json.steps.length, guardrails_count: countGuardrails(json),
+    skill: json, skill_md: skillToMarkdown(json),
   };
 }
 
@@ -117,6 +133,11 @@ export function buildWorkMap(skill: Pick<SkillJson, "steps">): WorkMapNode[] {
     }));
 }
 
+/** "Yes, exactly" style label for where a guardrail came from. */
+export function guardrailSourceLabel(g: Pick<SkillGuardrail, "source">): string {
+  return g.source === "teachback" ? "Added in the teach-back" : "From the Master";
+}
+
 export function guardrailLabel(type: string): string {
   return type === "stop_and_ask" ? "Stop and ask" : type === "limit" ? "Limit" : type.replace(/_/g, " ");
 }
@@ -141,7 +162,7 @@ export function skillToMarkdown(skill: SkillJson): string {
     lines.push(`## ${s.idx}. ${s.title}`);
     lines.push(`- Moment: ${s.screen_moment.description} (${formatTimestamp(s.screen_moment.t_ms)})`);
     lines.push(`- Decision: ${s.decision.summary}`);
-    lines.push(`- Why (expert): "${s.reason.quote}"`);
+    lines.push(s.reason ? `- Why (expert): "${s.reason.quote}"` : "- Why: not given by the expert");
     for (const g of s.guardrails) lines.push(`- ${guardrailLabel(g.type)}: ${g.rule}`);
   }
   if (skill.global_guardrails.length > 0) {

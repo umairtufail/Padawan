@@ -171,16 +171,17 @@ describe("question source", () => {
     t_ms: 3000, screen_summary: "ERP open", events: [], question_candidates: [], step_update: null, latency_ms: 1, skipped: null, ...over,
   });
 
-  it("reads strings and objects from question_candidates", () => {
-    const out = candidatesFromResponse(res({ question_candidates: ["Why now?", { text: "Who approves?", priority: 8, id: "x" }, { nope: 1 }, "  "] }));
-    expect(out.map((c) => [c.id, c.question, c.priority])).toEqual([["model-3000-0", "Why now?", 5], ["x", "Who approves?", 8]]);
+  it("reads the backend's question candidates and skips empty ones", () => {
+    const cand = (id: string, text: string, priority = 0.5) => ({ id, type: "reason" as const, text, anchor_event_id: 7, priority });
+    const out = candidatesFromResponse(res({ question_candidates: [cand("u1", " Why now? ", 0.9), cand("u2", "   "), cand("", "No id")] }));
+    expect(out).toEqual([{ id: "u1", question: "Why now?", priority: 0.9, source: "model", type: "reason", anchorEventId: 7 }]);
   });
 
   it("uses the model's questions and only falls back to the stub when there are none", () => {
-    const withModel = questionsForResponse(res({ events: [ev()], question_candidates: ["Why?"] }));
+    const withModel = questionsForResponse(res({ events: [ev()], question_candidates: [{ id: "u1", type: "reason", text: "Why?", anchor_event_id: 2, priority: 0.8 }] }));
     expect(withModel.map((c) => c.source)).toEqual(["model"]);
     const stub = questionsForResponse(res({ events: [ev()] }));
-    expect(stub).toEqual([{ id: "stub-2", question: "Why did you change cost center from 4711 to 0400?", priority: 3, source: "stub" }]);
+    expect(stub).toEqual([{ id: "stub-2", question: "Why did you change cost center from 4711 to 0400?", priority: -1, source: "stub", type: "reason", anchorEventId: 2 }]);
   });
 
   it("the stub ignores events that are not salient", () => {

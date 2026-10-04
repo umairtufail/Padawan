@@ -210,5 +210,8 @@ export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 
   const latencies = items.filter((i) => i.latencyMs !== null).map((i) => i.latencyMs as number);
   const lastLatency = latencies.length ? latencies[latencies.length - 1] : null;
 
-  return { items, push, counts, lastLatency };
+  /** ms epoch of the first frame (the session clock starts there), or null before it. */
+  const startedAtMs = useCallback(() => startedAt.current, []);
+
+  return { items, push, counts, lastLatency, startedAtMs };
 }

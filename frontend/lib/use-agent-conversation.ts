@@ -32,6 +32,13 @@ type Options = {
 /** How long Yoda waits for an answer before the mic goes back to muted. */
 export const ANSWER_WAIT_MS = 30_000;
 const MAX_CAPTIONS = 60;
+/** Scripted answers of the mock expert, one per question asked. */
+const MOCK_ANSWERS = [
+  "Because the cost center must match the asset class, equipment over five thousand is always capex.",
+  "I stop and ask the controller when there is no asset number, we never book capex without one.",
+  "In December some suppliers bill twice, so I hold those and compare before posting.",
+  "A new colleague usually forgets to check the purchase order for the asset number.",
+];
 /** Messages that start with a bracket are our own commands ([ASK], [START]...), not words of the expert. */
 const isCommand = (t: string) => /^\s*\[[A-Z_]+\]/.test(t);
 
@@ -57,6 +64,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
   const autoMic = useRef(false);
   const answerTimer = useRef<number | null>(null);
   const alive = useRef(true);
+  const mockAnswerIdx = useRef(0);
 
   useEffect(() => {
     toolsRef.current = tools;
@@ -167,7 +175,9 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       if (!alive.current) return;
       if (MOCK) {
         setStatus("connected");
-        addCaption("yoda", "Mock mode: Yoda is listening and stays silent until he is asked something.");
+        addCaption("yoda", mode === "debrief"
+          ? "Mock mode: Yoda is ready for the debrief. Ask him the open questions one by one."
+          : "Mock mode: Yoda is listening and stays silent until he is asked something.");
         return;
       }
       const { Conversation } = await import("@elevenlabs/client");
@@ -241,10 +251,11 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
           addCaption("yoda", q);
         }, 400);
         later(() => setAgentSpeaking(false), 3200);
-        later(() => addCaption("expert", "(simulated answer) Because the cost center must match the asset class."), 5200);
+        const answer = MOCK_ANSWERS[mockAnswerIdx.current++ % MOCK_ANSWERS.length];
+        later(() => addCaption("expert", `(simulated answer) ${answer}`), 5200);
         later(() => {
           addCaption("yoda", "Got it.");
-          runTool("log_answer", { question_id: "", summary: "Cost center must match the asset class (simulated)." });
+          runTool("log_answer", { question_id: "", summary: answer });
         }, 6500);
       } else {
         conv.current?.sendUserMessage(`[ASK] ${q}`);
@@ -252,6 +263,32 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       return true;
     },
     [status, micOn, applyMic, later, closeAnswerWindow, addCaption, runTool],
+  );
+
+  /**
+   * A plain command to Yoda (for example "[START]" in debrief mode). With mock voice there is no agent: `mockSpeech`
+   * is what a scripted Yoda says instead, so the screen can be tested without ElevenLabs.
+   */
+  /** Mock voice only: the Master "says" a line (a caption, like a transcribed utterance). */
+  const simulateExpertLine = useCallback((text: string) => addCaption("expert", text), [addCaption]);
+
+  const sendMessage = useCallback(
+    (command: string, mockSpeech?: string) => {
+      if (status !== "connected") return false;
+      if (MOCK) {
+        if (mockSpeech) {
+          later(() => {
+            setAgentSpeaking(true);
+            addCaption("yoda", mockSpeech);
+          }, 300);
+          later(() => setAgentSpeaking(false), 3000);
+        }
+        return true;
+      }
+      conv.current?.sendUserMessage(command);
+      return true;
+    },
+    [status, later, addCaption],
   );
 
   useEffect(() => {
@@ -268,7 +305,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
 
   return {
     status, error, captions, toolEvents, agentSpeaking, micOn, awaitingAnswer,
-    start, stop, setMic, sendContext, ask,
+    start, stop, setMic, sendContext, ask, sendMessage, simulateExpertLine,
     /** Mock mode only: lets the page type a fake expert line. */
     mock: MOCK,
   };

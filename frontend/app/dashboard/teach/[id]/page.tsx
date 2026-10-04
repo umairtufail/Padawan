@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, getSession, type FrameResponse, type PadawanEvent, type SessionDetail } from "../../../../lib/api";
+import {
+  ApiError, finishSession, getSession, getSteps, MOCK, setOffTheRecord,
+  type FrameResponse, type PadawanEvent, type SessionDetail, type StepDraft,
+} from "../../../../lib/api";
+import { saveDebrief } from "../../../../lib/debrief-handoff";
+import { useCaptureSync } from "../../../../lib/use-capture-sync";
+import LiveSteps from "../../../../components/live-steps";
+import MockScreenButton from "../../../../components/mock-screen-button";
 import type { CapturedFramePayload } from "../../../../lib/frame-delivery";
 import { useAgentConversation, type VoiceToolHandlers } from "../../../../lib/use-agent-conversation";
 import { useExpertSpeech } from "../../../../lib/use-expert-speech";
@@ -14,9 +21,10 @@ import { peekStream, releaseStream } from "../../../../lib/capture-handoff";
 import { useFrameBuffer } from "../../../../lib/use-frame-buffer";
 import ScreenCapture from "../../../screen-capture";
 import FrameTimeline from "../../../../components/frame-timeline";
-import { Chip, ErrorBox, Label } from "../../../../components/ui";
+import { btnPrimary, Chip, ErrorBox, Label } from "../../../../components/ui";
 
 const POLL_MS = 3000;
+const STEPS_POLL_MS = 4000;
 
 function EventCard({ ev }: { ev: PadawanEvent }) {
   const entities = Object.entries(ev.entities ?? {});
@@ -46,6 +54,7 @@ function EventCard({ ev }: { ev: PadawanEvent }) {
 
 export default function TeachSessionPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [error, setError] = useState("");
   const [notFound, setNotFound] = useState(false);
@@ -66,19 +75,47 @@ export default function TeachSessionPage() {
   // Yoda's voice: the frame buffer reports analysed frames through a stable forwarder (the pause controller is created below).
   const frameResponseRef = useRef<((res: FrameResponse) => void) | null>(null);
   const forwardResponse = useCallback((res: FrameResponse) => frameResponseRef.current?.(res), []);
-  const { items, push, counts, lastLatency } = useFrameBuffer(id, { onSettled: () => void refresh(), onResponse: forwardResponse });
+  const { items, push, counts, lastLatency, startedAtMs } = useFrameBuffer(id, { onSettled: () => void refresh(), onResponse: forwardResponse });
+  const countsRef = useRef(counts);
+  useEffect(() => {
+    countsRef.current = counts;
+  });
+
+  // Live steps: GET /steps every few seconds, and at once when a frame response says the open step changed.
+  const [steps, setSteps] = useState<StepDraft[]>([]);
+  const [stepHint, setStepHint] = useState<{ idx: number; title: string } | null>(null);
+  const refreshSteps = useCallback(async () => {
+    try {
+      setSteps(await getSteps(id));
+    } catch {
+      /* steps are a nice-to-have while recording; the debrief loads them again */
+    }
+  }, [id]);
 
   const [offRecord, setOffRecord] = useState(false);
   const offRecordRef = useRef(false);
   const [answers, setAnswers] = useState<string[]>([]);
+  const answerRef = useRef<((a: { question_id?: string; summary: string }) => Promise<string | null>) | null>(null);
   const tools = useMemo<VoiceToolHandlers>(
     () => ({
-      log_answer: ({ summary }) => setAnswers((a) => [...a, summary]),
-      set_off_record: ({ on }) => setOffRecord(on),
+      log_answer: ({ question_id, summary }) => {
+        setAnswers((a) => [...a, summary]);
+        void answerRef.current?.({ question_id, summary });
+      },
+      set_off_record: ({ on }) => {
+        setOffRecord(on);
+        void setOffTheRecord(id, on).catch(() => undefined);
+      },
     }),
-    [],
+    [id],
   );
   const convo = useAgentConversation({ sessionId: id, mode: "capture", tools });
+  const [clockBase] = useState(() => Date.now());
+  const toSessionMs = useCallback((at: number) => Math.max(0, at - (startedAtMs() ?? clockBase)), [startedAtMs, clockBase]);
+  const sync = useCaptureSync({ sessionId: id, phase: "live", captions: convo.captions, offRecord, toSessionMs });
+  useEffect(() => {
+    answerRef.current = sync.onAnswer;
+  });
   const speech = useExpertSpeech(convo.status === "connected", convo.mock);
   const lastFrameChangeAt = items.length ? items[items.length - 1].takenAt.getTime() : null;
   const pause = usePauseController({
@@ -91,9 +128,19 @@ export default function TeachSessionPage() {
     offRecord,
     ask: convo.ask,
     sendContext: convo.sendContext,
+    onAsked: sync.onAsked,
   });
   useEffect(() => {
-    frameResponseRef.current = pause.onFrameResponse;
+    frameResponseRef.current = (res) => {
+      pause.onFrameResponse(res);
+      const u = res.step_update;
+      if (u) {
+        setStepHint((prev) => {
+          if (!prev || prev.idx !== u.idx || prev.title !== u.title) void refreshSteps();
+          return { idx: u.idx, title: u.title };
+        });
+      }
+    };
     offRecordRef.current = offRecord;
   });
   // Off the record: frames are not sent while the Master asked Yoda to pause the capture.
@@ -110,6 +157,35 @@ export default function TeachSessionPage() {
     const timer = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
+    void refreshSteps();
+    const timer = window.setInterval(() => void refreshSteps(), STEPS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshSteps]);
+
+  // Finish: stop Yoda, let the last frames and transcript lines land, close the steps, then go to the debrief.
+  const [finishing, setFinishing] = useState("");
+  const [finishError, setFinishError] = useState("");
+  async function onFinish() {
+    setFinishError("");
+    try {
+      setFinishing("Sending the last moments to Yoda…");
+      await convo.stop();
+      for (let i = 0; i < 20 && countsRef.current.queued > 0; i++) await new Promise((r) => setTimeout(r, 500));
+      await sync.flush();
+      setFinishing("Yoda is sorting the steps…");
+      const result = await finishSession(id);
+      saveDebrief(id, result);
+      router.push(`/dashboard/teach/${encodeURIComponent(id)}/debrief`);
+    } catch (err) {
+      setFinishing("");
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setFinishError(err instanceof Error ? err.message : "Could not finish the session.");
+      }
+    }
+  }
 
   useEffect(() => () => releaseStream(id), [id]);
 
@@ -133,6 +209,19 @@ export default function TeachSessionPage() {
       </div>
 
       {error && <ErrorBox>{error}</ErrorBox>}
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gold/30 bg-surface/90 p-4" data-testid="finish-bar">
+        <div className="min-w-0 flex-1 basis-60">
+          <p className="font-semibold text-fg">Done with the task?</p>
+          <p className="text-sm text-muted">Yoda sorts what he saw into steps, then asks what is still unclear before he writes the Holocron.</p>
+        </div>
+        {MOCK && <MockScreenButton onFrame={pushFrame} />}
+        <button type="button" className={btnPrimary} onClick={() => void onFinish()} disabled={finishing !== ""}>
+          {finishing || "Finish session"}
+        </button>
+      </div>
+      {finishError && <ErrorBox>{finishError}</ErrorBox>}
+      {sync.syncError && <ErrorBox>{sync.syncError}</ErrorBox>}
 
       <ScreenCapture
         embedded
@@ -167,6 +256,8 @@ export default function TeachSessionPage() {
         onAskYoda={() => pause.askNow(session?.last_screen_summary ? "Why did you do that last step?" : "What are you doing right now, and why?")}
         onSimulateSpeech={() => speech.simulate(4000)}
       />
+
+      <LiveSteps steps={steps} current={stepHint} />
 
       {answers.length > 0 && (
         <section aria-labelledby="answers" className="rounded-2xl border border-gold/30 bg-surface/90 p-5">

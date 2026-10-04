@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, listSkills } from "../lib/api";
-import { filterSkills, type SkillStatus, type SkillSummary } from "../lib/skills";
+import { filterSkills, type SkillSummary } from "../lib/skills";
 import { Chip, ErrorBox, Label } from "./ui";
 import { formatDate, StatusChip } from "./skill-parts";
 import YodaFigure from "./yoda-figure";
@@ -34,16 +34,16 @@ function SkillCard({ skill }: { skill: SkillSummary }) {
 }
 
 export default function ArchivesView() {
-  const [tab, setTab] = useState<SkillStatus>("published");
+  const [tab, setTab] = useState<"published" | "mine">("published");
   const [skills, setSkills] = useState<SkillSummary[] | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
-  const load = useCallback(async (status: SkillStatus) => {
+  const load = useCallback(async (which: "published" | "mine") => {
     setError("");
     setSkills(null);
     try {
-      setSkills(await listSkills(status));
+      setSkills(await listSkills({ mine: which === "mine" }));
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 401)) {
         setError(err instanceof Error ? err.message : "Could not open the Archives.");
@@ -77,8 +77,8 @@ export default function ArchivesView() {
           <button role="tab" type="button" aria-selected={tab === "published"} className={tabCls(tab === "published")} onClick={() => setTab("published")}>
             Published
           </button>
-          <button role="tab" type="button" aria-selected={tab === "draft"} className={tabCls(tab === "draft")} onClick={() => setTab("draft")}>
-            My drafts
+          <button role="tab" type="button" aria-selected={tab === "mine"} className={tabCls(tab === "mine")} onClick={() => setTab("mine")}>
+            My Holocrons
           </button>
         </div>
         <label className="min-w-0 flex-1 sm:max-w-sm">
@@ -101,7 +101,7 @@ export default function ArchivesView() {
             ? "No Holocron matches that search."
             : tab === "published"
               ? "The Archives are empty. Teach Yoda something and publish the Holocron."
-              : "No drafts. A finished teaching session shows up here until you publish it."}
+              : "Nothing here yet. A finished teaching session shows up as a draft until you publish it."}
         </p>
       )}
       {shown.length > 0 && (

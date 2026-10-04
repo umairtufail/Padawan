@@ -28,7 +28,7 @@ export default function SkillPopup() {
     };
   }, [router]);
 
-  const steps = skill ? [...skill.steps].sort((a, b) => a.idx - b.idx) : [];
+  const steps = skill?.skill ? [...skill.skill.steps].sort((a, b) => a.idx - b.idx) : [];
 
   return (
     <div
@@ -70,7 +70,7 @@ export default function SkillPopup() {
             <>
               <p className="text-fg">{skill.description}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Chip tone="muted">{skill.steps.length} steps</Chip>
+                <Chip tone="muted">{skill.steps_count} steps</Chip>
                 <Chip tone="danger">{skill.guardrails_count} guardrails</Chip>
               </div>
               <h3 className="mt-5 font-mono text-xs uppercase tracking-widest text-muted">Steps</h3>

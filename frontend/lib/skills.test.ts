@@ -4,19 +4,21 @@ import {
   type SkillJson, type SkillSummary,
 } from "./skills";
 
-const g = (id: string, type = "limit") => ({ id, type, rule: `rule ${id}`, quote: "q", t_ms: 1 });
+const g = (id: string, type = "limit") => ({ id, type, rule: `rule ${id}`, quote: "q", t_ms: 1 as number | null, source: "expert" as const });
 const step = (idx: number, type: string, guardrails = [] as ReturnType<typeof g>[]) => ({
   idx, title: `Step ${idx}`,
-  screen_moment: { t_ms: idx * 1000, description: "moment" },
+  screen_moment: { t_ms: idx * 1000, keyframe_path: null, description: "moment" },
   decision: { type, summary: "did a thing" },
   reason: { text: "because", quote: "because I said", t_ms: 1 },
   guardrails,
+  predict_prompt: null,
 });
 const skill: SkillJson = {
   id: "s1", title: "Process Supplier Invoices!", description: "How to\nprocess  invoices.",
   author: { id: "a", name: "Sabine" }, created_at: "2026-10-03T18:00:00Z", language: "en",
   steps: [step(2, "judgment", [g("g1"), g("g2", "stop_and_ask")]), step(1, "routine")],
   global_guardrails: [g("gg")],
+  teachback: { confirmed: true, corrections: [] },
 };
 
 describe("formatTimestamp", () => {
@@ -59,6 +61,10 @@ describe("counting and export", () => {
   it("slugifies", () => {
     expect(slugify("Process Supplier Invoices!")).toBe("process-supplier-invoices");
     expect(slugify("!!!")).toBe("holocron");
+  });
+  it("renders a step without a reason honestly", () => {
+    const s = { ...skill, steps: [{ ...step(1, "routine"), reason: null }] };
+    expect(skillToMarkdown(s)).toContain("- Why: not given by the expert");
   });
   it("renders SKILL.md in step order", () => {
     const md = skillToMarkdown(skill);

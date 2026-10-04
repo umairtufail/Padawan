@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ApiError, exportSkill, publishSkill, type SkillDetail, type SkillStep } from "../lib/api";
-import { formatTimestamp, guardrailLabel } from "../lib/skills";
+import { formatTimestamp, guardrailLabel, guardrailSourceLabel } from "../lib/skills";
 import { btnGhost, btnPrimary, Chip, ErrorBox, Label } from "./ui";
 import { formatDate, StatusChip, useSkill } from "./skill-parts";
 import WorkMap from "./work-map";
@@ -38,11 +38,15 @@ function StepDetail({ step }: { step: SkillStep }) {
 
       <section aria-label="Reason">
         <Label className="!text-jade">Why, in the Master&apos;s words</Label>
-        <blockquote className="mt-2 border-l-2 border-jade/60 pl-4">
-          <p className="font-heading text-lg italic text-fg">&ldquo;{step.reason.quote}&rdquo;</p>
-          <p className="mt-1 text-sm text-muted">{step.reason.text}</p>
-          <footer className="mt-1 font-mono text-xs text-muted">at {formatTimestamp(step.reason.t_ms)}</footer>
-        </blockquote>
+        {step.reason ? (
+          <blockquote className="mt-2 border-l-2 border-jade/60 pl-4">
+            <p className="font-heading text-lg italic text-fg">&ldquo;{step.reason.quote}&rdquo;</p>
+            <p className="mt-1 text-sm text-muted">{step.reason.text}</p>
+            <footer className="mt-1 font-mono text-xs text-muted">at {formatTimestamp(step.reason.t_ms)}</footer>
+          </blockquote>
+        ) : (
+          <p className="mt-1 text-sm text-muted">The Master never said why. Yoda does not invent a reason.</p>
+        )}
       </section>
 
       <section aria-label="Guardrails">
@@ -55,7 +59,13 @@ function StepDetail({ step }: { step: SkillStep }) {
               <li key={g.id} className="rounded-xl border border-danger/40 bg-danger/5 p-3">
                 <Chip tone="danger">{guardrailLabel(g.type)}</Chip>
                 <p className="mt-2 font-semibold text-fg">{g.rule}</p>
-                <p className="mt-1 text-sm italic text-muted">&ldquo;{g.quote}&rdquo; <span className="not-italic">({formatTimestamp(g.t_ms)})</span></p>
+                {g.quote ? (
+                  <p className="mt-1 text-sm italic text-muted">
+                    &ldquo;{g.quote}&rdquo;
+                    {g.t_ms !== null && <span className="not-italic"> ({formatTimestamp(g.t_ms)})</span>}
+                  </p>
+                ) : null}
+                {g.source === "teachback" && <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-gold">{guardrailSourceLabel(g)}</p>}
               </li>
             ))}
           </ul>
@@ -100,7 +110,8 @@ export default function HolocronView({ id }: { id: string }) {
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!skill) return <p className="font-mono text-sm text-muted" role="status">Consulting the Holocron…</p>;
 
-  const steps = [...skill.steps].sort((a, b) => a.idx - b.idx);
+  const json = skill.skill;
+  const steps = json ? [...json.steps].sort((a, b) => a.idx - b.idx) : [];
   const current = steps.find((s) => s.idx === selected) ?? steps[0];
 
   async function act(kind: "publish" | "export", fn: () => Promise<void>) {
@@ -136,7 +147,7 @@ export default function HolocronView({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={skill.status} />
             {skill.domain && <Chip tone="info">{skill.domain}</Chip>}
-            <Chip tone="muted">{skill.steps.length} steps</Chip>
+            <Chip tone="muted">{skill.steps_count} steps</Chip>
             <Chip tone="danger">{skill.guardrails_count} {skill.guardrails_count === 1 ? "guardrail" : "guardrails"}</Chip>
           </div>
           <h1 className="mt-2 font-heading text-2xl font-black text-gold sm:text-3xl">{skill.title}</h1>
@@ -147,7 +158,7 @@ export default function HolocronView({ id }: { id: string }) {
         </div>
         <div className="flex flex-wrap gap-2 sm:flex-col">
           {skill.status === "draft" ? (
-            <button type="button" className={btnPrimary} onClick={() => void onPublish()} disabled={busy !== ""}>
+            <button type="button" className={btnPrimary} onClick={() => void onPublish()} disabled={busy !== "" || skill.steps_count < 1}>
               {busy === "publish" ? "Publishing…" : "Publish to the Archives"}
             </button>
           ) : (
@@ -161,17 +172,24 @@ export default function HolocronView({ id }: { id: string }) {
 
       {actionError && <ErrorBox>{actionError}</ErrorBox>}
 
-      {skill.teachback?.corrections && skill.teachback.corrections.length > 0 && (
+      {skill.status === "draft" && (
+        <p className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-fg" data-testid="draft-note">
+          <span className="font-mono text-xs uppercase tracking-widest text-gold">Draft </span>
+          Only you can see this Holocron. Read it through, then publish it to the Jedi Archives.
+        </p>
+      )}
+
+      {json && json.teachback.corrections.length > 0 && (
         <p className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-fg">
           <span className="font-mono text-xs uppercase tracking-widest text-gold">Master&apos;s correction </span>
-          {skill.teachback.corrections.join(" ")}
+          {json.teachback.corrections.join(" ")}
         </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section aria-labelledby="map-h">
           <h2 id="map-h" className="mb-3 font-heading text-xl font-black text-fg">Work map</h2>
-          <WorkMap skill={skill} selected={current?.idx ?? null} onSelect={setSelected} />
+          {json ? <WorkMap skill={json} selected={current?.idx ?? null} onSelect={setSelected} /> : null}
         </section>
         <section aria-labelledby="detail-h" className="lg:sticky lg:top-6 lg:self-start">
           <h2 id="detail-h" className="sr-only">Step detail</h2>
