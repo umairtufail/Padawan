@@ -15,6 +15,7 @@ from ..schemas import (
     SynthesizeOut, TeachbackIn, UtterancesIn, UtterancesOut,
 )
 from ..services import gaps, segmenter, synthesizer
+from ..services.keyframes import KeyframeStore, get_keyframes, sign_many
 
 log = logging.getLogger("padawan.capture")
 router = APIRouter()
@@ -91,16 +92,27 @@ async def log_answer(
     return AnswerOut(question_id=body.question_id, utterance_id=uid)
 
 
+async def _step_models(store: KeyframeStore, user: AuthUser, rows: list[dict]) -> list[StepDraft]:
+    """StepDraft models with a fresh signed `keyframe_url` where the step has a keyframe."""
+    urls = await sign_many(store, user, [r.get("keyframe_path") for r in rows])
+    return [
+        StepDraft(**{k: r.get(k) for k in StepDraft.model_fields if r.get(k) is not None},
+                  keyframe_url=urls.get(r.get("keyframe_path")))
+        for r in rows
+    ]
+
+
 @router.get("/sessions/{session_id}/steps", response_model=SessionSteps)
 async def get_steps(
-    session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
+    session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
+    store: KeyframeStore = Depends(get_keyframes),
 ) -> SessionSteps:
     await _owned_session(repo, user, session_id)
     try:
         rows = await repo.list_steps(user, session_id)
     except RepoError:
         raise _storage_error()
-    return SessionSteps(steps=[StepDraft(**{k: r.get(k) for k in StepDraft.model_fields if r.get(k) is not None}) for r in rows])
+    return SessionSteps(steps=await _step_models(store, user, rows))
 
 
 async def _load(repo: SessionRepo, user: AuthUser, session_id: str):
@@ -112,7 +124,8 @@ async def _load(repo: SessionRepo, user: AuthUser, session_id: str):
 
 @router.post("/sessions/{session_id}/finish", response_model=FinishOut)
 async def finish_session(
-    session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
+    session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
+    store: KeyframeStore = Depends(get_keyframes),
 ) -> FinishOut:
     """Stop capture: close the steps, compute the gap list for the debrief, move the session to `debrief`."""
     await _owned_session(repo, user, session_id)
@@ -125,7 +138,7 @@ async def finish_session(
     except RepoError:
         raise _storage_error()
     found = gaps.find_gaps(steps, events, utterances, questions, gaps.get_candidates(session_id))
-    return FinishOut(session_id=session_id, status="debrief", steps=[StepDraft(**s) for s in steps], gaps=found)
+    return FinishOut(session_id=session_id, status="debrief", steps=await _step_models(store, user, steps), gaps=found)
 
 
 @router.post("/sessions/{session_id}/teachback", response_model=SynthesizeOut)

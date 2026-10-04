@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # Run the step segmenter after this many new events, or this many seconds, whichever comes first.
     segmenter_every_events: int = 10
     segmenter_every_s: float = 20.0
+    # Uploading a keyframe must never hold up the frame response for long; on timeout the frame has none.
+    keyframe_timeout_s: float = 4.0
 
     # Default is "admin" so a deployment that forgets to set AUTH_MODE is closed, not open.
     # "dev": no login needed, in-memory sessions (local UI work only, never deploy this).

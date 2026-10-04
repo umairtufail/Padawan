@@ -91,6 +91,7 @@ class SessionSummary(BaseModel):
 
 class StoredEvent(Event):
     t_ms: int = 0
+    keyframe_path: str | None = None
 
 
 class SessionDetail(SessionSummary):
@@ -161,6 +162,14 @@ class StepDraft(BaseModel):
     event_ids: list[int] = Field(default_factory=list)
     question_ids: list[str] = Field(default_factory=list)
     status: Literal["open", "closed"] = "open"
+    keyframe_path: str | None = None
+    keyframe_url: str | None = None  # short-lived signed URL, filled on read, owner only
+
+
+class KeyframeOut(BaseModel):
+    t_ms: int
+    url: str
+    expires_in: int
 
 
 GapType = Literal["missing_reason", "missing_guardrail", "unasked_question", "unclear_term", "unseen_case"]
@@ -201,6 +210,7 @@ class SkillAuthor(BaseModel):
 class ScreenMoment(BaseModel):
     t_ms: int
     keyframe_path: str | None = None
+    keyframe_url: str | None = None  # signed on read for the owner, never stored in skill_json
     description: str = ""
 
 
