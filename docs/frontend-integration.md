@@ -155,17 +155,21 @@ Keyframes (the expert's screen at a salient moment or at the start of a step):
 
 | Method and path | Response |
 |---|---|
-| `GET /v1/skills?q=&domain=&mine=` | Published skills, newest first: `[SkillSummary]`. `q` searches title and description, `domain` is an exact match, `mine=true` lists **your own** skills instead (drafts included, newest first). Max 100 |
+| `GET /v1/skills?q=&domain=&mine=&sort=` | Published skills: `[SkillSummary]`. `q` searches title and description, `domain` is an exact match, `mine=true` lists **your own** skills instead (drafts included). `sort=newest` (default), `popular` (most `learners_count` first, ties newest first) or `mastery` (highest `avg_mastery` first, skills without one last); anything else is `422`. Max 100 (sorting applies to those 100) |
 | `GET /v1/skills/{id}` | `SkillDetail` = `SkillSummary` plus `skill` (the Holocron JSON below, or `null`) and `skill_md`. `404` for an unknown skill or someone else's **draft** |
 | `POST /v1/skills/{id}/publish` | The updated `SkillDetail`. Author only: `403` if it is visible but not yours, `404` for someone else's draft, `409` if it has no steps yet. Publishing twice changes nothing |
+| `POST /v1/skills/{id}/unpublish` | The updated `SkillDetail` with `status: "draft"` and `published_at: null`. Author only: `403` if it is visible but not yours, `404` if not visible to you. Unpublishing a draft changes nothing. The skill leaves the Archives, but learn sessions that were already started keep working for their owners (they can still read the skill and finish); nobody can start a **new** learn session on it except the author |
 | `GET /v1/skills/{id}/export` | The `SKILL.md` as `text/markdown` with `Content-Disposition: attachment; filename="<slug>.SKILL.md"`. Readable for published skills and your own drafts |
 
 ```json
 // SkillSummary
 {"id": "uuid", "title": "Process supplier invoices", "description": "...", "domain": "finance", "language": "en",
  "status": "published", "author": {"id": "uuid", "name": "Sabine"}, "steps_count": 4, "guardrails_count": 3,
- "created_at": "2026-10-03T18:00:00Z", "published_at": "2026-10-04T08:00:00Z"}
+ "created_at": "2026-10-03T18:00:00Z", "published_at": "2026-10-04T08:00:00Z",
+ "learners_count": 3, "avg_mastery": 72.5}
 ```
+
+`learners_count` is the number of **distinct people** who started a learn session on the skill (one person with five sessions counts once). `avg_mastery` is the average `mastery_score` (0 to 100, one decimal) over **finished** learn sessions, `null` while there is none. These are aggregates only: an author never sees who learned their skill, and a learner only ever sees their own sessions. The numbers are computed in the database by a narrow function (see `supabase/migrations/20261004150000_marketplace_stats.sql`), because row-level security hides other people's sessions. The same fields are on `SkillDetail`.
 
 The Holocron JSON (`skill`) is the contract from Notion page 03, with two differences you must handle: `reason` can be `null` (the expert never gave one; the backend never invents a reason), and each guardrail has `source` (`"expert"` or `"teachback"`; teach-back ones have an empty `quote` and `t_ms: null`). `screen_moment.keyframe_path` is the storage path of the step's keyframe, or `null` when none was kept. `GET /v1/skills/{id}` (and publish) adds `screen_moment.keyframe_url`, a 5-minute signed URL, **only when the caller is the author**: keyframes are private to the expert, so a Padawan reading a published skill gets `null` there (sharing them with learners is not built). Guardrail ids are unique across the whole skill (`g1`, `g2`, ...). `predict_prompt` is set only on `judgment` steps.
 
@@ -210,6 +214,7 @@ export type SkillJson = {
 export type SkillSummary = {
   id: string; title: string; description: string; domain: string | null; language: string; status: "draft" | "published";
   author: { id: string; name: string }; steps_count: number; guardrails_count: number; created_at: string; published_at: string | null;
+  learners_count: number; avg_mastery: number | null; // aggregates, never who
 };
 export type SkillDetail = SkillSummary & { skill: SkillJson | null; skill_md: string | null };
 ```
@@ -317,12 +322,26 @@ All calls need the same token as above. A **learn session** is a session of kind
 
 | Method and path | Body | Response |
 |---|---|---|
+| `GET /v1/learn/sessions` | none | `[LearnSessionListItem]`, **your own** learn sessions, newest first (max 100). See below |
 | `POST /v1/learn/sessions` | `{"skill_id": "uuid"}` | `201 LearnSessionOut`. `404` unknown skill or someone else's draft, `409` skill has no steps |
 | `POST /v1/learn/sessions/{id}/frames` | multipart `t_ms` + `frame` (JPEG), same as teach frames | `LearnFrameResponse` (frame response plus `verdict`) |
 | `POST /v1/learn/sessions/{id}/predictions` | `{"step_idx": 1, "predicted": "cost center 0400", "resolve": false}` | `PredictionOut`. `422` unknown `step_idx` or empty text |
 | `POST /v1/learn/sessions/{id}/predictions/{step_idx}/resolve` | none | `PredictionResult`. `409` if no prediction was recorded for that step |
 | `GET /v1/learn/sessions/{id}/report?summary=true` | none | `MasteryReport`. Any time, repeatedly, does not end the session. `summary=false` skips the model call (instant) |
 | `POST /v1/learn/sessions/{id}/finish` | none | `MasteryReport` (with summary), and the session is marked `done` |
+
+`GET /v1/learn/sessions` (the learner's history) returns, newest first, only the caller's own sessions:
+
+```ts
+export type LearnSessionListItem = {
+  session_id: string; skill_id: string | null; skill_title: string; created_at: string;
+  finished: boolean;            // true after POST .../finish
+  mastery_score: number | null; // 0..100, set only when finished
+  steps_total: number;          // steps in the Holocron
+  steps_done: number;           // steps with any progress (reached or predicted), never above steps_total
+};
+```
+`finish` stores the final `mastery_score`, which is what feeds the skill's `avg_mastery`. A learn session keeps working after the author unpublishes the skill (the skill stays readable to people who already started it), and it stays in the history.
 
 Errors for all of them: `401`, `404` unknown or not your learn session, `409` the session's skill is no longer readable, `502 {"detail": "storage unavailable"}`.
 

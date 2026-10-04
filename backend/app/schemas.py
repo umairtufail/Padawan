@@ -273,6 +273,8 @@ class SkillSummary(BaseModel):
     guardrails_count: int = 0
     created_at: datetime
     published_at: datetime | None = None
+    learners_count: int = 0  # distinct people who started a learn session (never who)
+    avg_mastery: float | None = None  # 0..100 over finished learn sessions, null if none
 
 
 class SkillDetail(SkillSummary):
