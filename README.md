@@ -116,7 +116,7 @@ Full guide with the exact variables for FastAPI Cloud and Vercel, a verification
 ## Tests
 
 ```bash
-cd backend
+cd backend                     #backend directory
 uv run pytest                  # offline and fast (the model is faked)
 uv run pytest -m live          # calls the real vision model
 uv run python -m scripts.eval_vision --trials 5   # does the model detect differences correctly?
