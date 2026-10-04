@@ -26,21 +26,21 @@
 <rect x="65" y="431" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="79" y="453" font-size="15" font-weight="700" fill="#064e3b">Screen capture + frame gate</text>
 <text x="79" y="471" font-size="12" fill="#047857">sends only changed frames; real share not tested yet</text>
-<rect x="65" y="719" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="79" y="741" font-size="15" font-weight="700" fill="#475569">Holocron / Work Map view</text>
-<text x="79" y="759" font-size="12" fill="#64748b">steps, reasons and guardrails of a session</text>
-<rect x="65" y="791" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="79" y="813" font-size="15" font-weight="700" fill="#475569">Jedi Archives marketplace</text>
-<text x="79" y="831" font-size="12" fill="#64748b">browse Holocrons, start a session</text>
-<rect x="65" y="863" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="79" y="885" font-size="15" font-weight="700" fill="#475569">Learn session</text>
-<text x="79" y="903" font-size="12" fill="#64748b">replay the Master's moment, stop before Save</text>
+<rect x="65" y="719" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="79" y="741" font-size="15" font-weight="700" fill="#064e3b">Holocron / Work Map view</text>
+<text x="79" y="759" font-size="12" fill="#047857">steps, reasons and guardrails of a session</text>
+<rect x="65" y="791" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="79" y="813" font-size="15" font-weight="700" fill="#064e3b">Jedi Archives marketplace</text>
+<text x="79" y="831" font-size="12" fill="#047857">browse Holocrons, start a session</text>
+<rect x="65" y="863" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="79" y="885" font-size="15" font-weight="700" fill="#064e3b">Learn session</text>
+<text x="79" y="903" font-size="12" fill="#047857">replay the Master's moment, stop before Save</text>
 <rect x="65" y="935" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="79" y="957" font-size="15" font-weight="700" fill="#064e3b">Supabase login UI</text>
 <text x="79" y="975" font-size="12" fill="#047857">email and password, Supabase mode (admin login stays the default)</text>
-<rect x="65" y="1007" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="79" y="1029" font-size="15" font-weight="700" fill="#475569">Yoda voice UI</text>
-<text x="79" y="1047" font-size="12" fill="#64748b">mic, captions, pause controller</text>
+<rect x="65" y="1007" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="79" y="1029" font-size="15" font-weight="700" fill="#064e3b">Yoda voice UI</text>
+<text x="79" y="1047" font-size="12" fill="#047857">mic, captions, pause controller; real voice not tested</text>
 <rect x="645" y="215" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="659" y="237" font-size="15" font-weight="700" fill="#064e3b">Auth</text>
 <text x="659" y="255" font-size="12" fill="#047857">admin login + token check, Supabase JWT check</text>
@@ -56,27 +56,27 @@
 <rect x="645" y="503" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="659" y="525" font-size="15" font-weight="700" fill="#064e3b">Vision service + prompts</text>
 <text x="659" y="543" font-size="12" fill="#047857">frame + previous summary gives events</text>
-<rect x="645" y="575" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="597" font-size="15" font-weight="700" fill="#475569">Question planner</text>
-<text x="659" y="615" font-size="12" fill="#64748b">what Yoda asks (prompt written, no code)</text>
-<rect x="645" y="647" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="669" font-size="15" font-weight="700" fill="#475569">Step segmenter + gap finder</text>
-<text x="659" y="687" font-size="12" fill="#64748b">steps for the debrief</text>
-<rect x="645" y="719" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="741" font-size="15" font-weight="700" fill="#475569">Skill synthesizer</text>
-<text x="659" y="759" font-size="12" fill="#64748b">Holocron JSON + SKILL.md, quotes checked</text>
-<rect x="645" y="791" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="813" font-size="15" font-weight="700" fill="#475569">Skills API</text>
-<text x="659" y="831" font-size="12" fill="#64748b">list, publish, export</text>
-<rect x="645" y="863" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="885" font-size="15" font-weight="700" fill="#475569">Guardrail checker</text>
-<text x="659" y="903" font-size="12" fill="#64748b">learn mode: stop the wrong move before Save</text>
-<rect x="645" y="935" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="957" font-size="15" font-weight="700" fill="#475569">PII redaction + off the record</text>
-<text x="659" y="975" font-size="12" fill="#64748b">Presidio, nothing stored in the range</text>
-<rect x="645" y="1007" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="659" y="1029" font-size="15" font-weight="700" fill="#475569">Voice sessions</text>
-<text x="659" y="1047" font-size="12" fill="#64748b">signed URLs for the Yoda agents</text>
+<rect x="645" y="575" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="597" font-size="15" font-weight="700" fill="#064e3b">Question planner</text>
+<text x="659" y="615" font-size="12" fill="#047857">what Yoda asks, anchored to real events</text>
+<rect x="645" y="647" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="669" font-size="15" font-weight="700" fill="#064e3b">Step segmenter + gap finder</text>
+<text x="659" y="687" font-size="12" fill="#047857">steps for the debrief</text>
+<rect x="645" y="719" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="741" font-size="15" font-weight="700" fill="#064e3b">Skill synthesizer</text>
+<text x="659" y="759" font-size="12" fill="#047857">Holocron JSON + SKILL.md, quotes checked</text>
+<rect x="645" y="791" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="813" font-size="15" font-weight="700" fill="#064e3b">Skills API</text>
+<text x="659" y="831" font-size="12" fill="#047857">list, publish, export</text>
+<rect x="645" y="863" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="885" font-size="15" font-weight="700" fill="#064e3b">Guardrail checker</text>
+<text x="659" y="903" font-size="12" fill="#047857">learn mode: stop the wrong move before Save</text>
+<rect x="645" y="935" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="957" font-size="15" font-weight="700" fill="#064e3b">PII redaction + off the record</text>
+<text x="659" y="975" font-size="12" fill="#047857">regex and checksums, nothing analysed off the record</text>
+<rect x="645" y="1007" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="659" y="1029" font-size="15" font-weight="700" fill="#064e3b">Voice sessions</text>
+<text x="659" y="1047" font-size="12" fill="#047857">signed URLs for the Yoda agents</text>
 <rect x="1225" y="215" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="1239" y="237" font-size="15" font-weight="700" fill="#064e3b">Supabase Auth</text>
 <text x="1239" y="255" font-size="12" fill="#047857">email and password works; Google not set up</text>
@@ -86,12 +86,12 @@
 <rect x="1225" y="503" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="1239" y="525" font-size="15" font-weight="700" fill="#064e3b">Nebius: DeepSeek V4.1 Flash</text>
 <text x="1239" y="543" font-size="12" fill="#047857">vision model, 1 to 2 s per frame</text>
-<rect x="1225" y="647" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="1239" y="669" font-size="15" font-weight="700" fill="#475569">Supabase Storage + Realtime</text>
-<text x="1239" y="687" font-size="12" fill="#64748b">keyframes bucket, live steps (enabled, unused)</text>
-<rect x="1225" y="1007" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="1239" y="1029" font-size="15" font-weight="700" fill="#475569">ElevenLabs Agents</text>
-<text x="1239" y="1047" font-size="12" fill="#64748b">Yoda interviewer + tutor</text>
+<rect x="1225" y="647" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="1239" y="669" font-size="15" font-weight="700" fill="#064e3b">Supabase Storage + Realtime</text>
+<text x="1239" y="687" font-size="12" fill="#047857">keyframes bucket in use, Realtime unused</text>
+<rect x="1225" y="1007" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="1239" y="1029" font-size="15" font-weight="700" fill="#064e3b">ElevenLabs Agents</text>
+<text x="1239" y="1047" font-size="12" fill="#047857">Yoda interviewer + tutor</text>
 <text x="69" y="517" font-size="12" font-style="italic" fill="#64748b">All calls go through lib/api.ts (token handling, mock mode).</text>
 <text x="69" y="537" font-size="12" font-style="italic" fill="#64748b">Frames go straight from the browser to the backend,</text>
 <text x="69" y="555" font-size="12" font-style="italic" fill="#64748b">never through a Next.js route (Vercel body limit).</text>

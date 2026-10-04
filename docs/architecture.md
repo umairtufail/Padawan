@@ -18,17 +18,17 @@ Last checked against the code: 2026-10-04.
 | Storage layer | Built | in memory (dev, admin), or Supabase called as the user (supabase mode); the deployed backend uses memory |
 | Supabase database | Built | 8 tables with row-level security, sign-up profile trigger, owner write policies |
 | Supabase Auth login | Built | email and password, tested live (`docs/supabase-login.md`); not switched on in the deployments yet, Google not set up (#40) |
-| Supabase Storage + Realtime | Not built | bucket and publication exist but nothing uses them |
-| Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Not built | tickets #25, #26, #28 |
-| Question planner | Not built | prompt written (`backend/app/prompts/question_planner.system.md`), no code (#27) |
-| Step segmenter, gap finder, skill synthesizer, skills API | Not built | needed for the debrief, the Holocron and the marketplace |
-| Holocron view, Jedi Archives marketplace, learn session | Not built | tickets #33, #34, #37 |
-| Guardrail checker | Not built | learn mode, stops the wrong move before Save |
-| PII redaction, off the record | Not built | Presidio is not used anywhere yet |
+| Supabase Storage (keyframes) | Built | private bucket, step keyframes with signed URLs; Realtime is still unused |
+| Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Built | both agents created, signed-URL endpoint, auto-start voice UI; spoken questions verified over a real websocket, **not yet with a browser microphone** |
+| Question planner | Built | `backend/app/prompts/question_planner.system.md`, anchored to real events, 5 of 6 live trials |
+| Step segmenter, gap finder, skill synthesizer, skills API | Built | debrief, teach-back, draft Holocron, publish; steps on real captures not yet judged |
+| Holocron view, Jedi Archives marketplace, learn session | Built | `/dashboard/skills`, `/dashboard/learn/[id]` |
+| Guardrail checker | Built | stop, warn, ok with confidence; 40 of 40 on hand-written cases (not real frames) |
+| PII redaction, off the record | Built | regex and checksum redaction, off-the-record switch (kept in memory) |
 
 ## Deployments
-- **Frontend (Vercel):** the build is blocked, so the old page is still live. See `docs/deployment.md`.
-- **Backend (FastAPI Cloud):** live, but it runs open (`AUTH_MODE=dev`). Set `AUTH_MODE=admin` and your own `ADMIN_PASSWORD` (see `docs/deployment.md`).
+- **Frontend (Vercel):** builds are rate limited on the free plan right now (retry after 24 h), so the live page can be an older build. See `docs/deployment.md`.
+- **Backend (FastAPI Cloud):** live with the latest endpoints; it answers 401 without a token. Switch it to `AUTH_MODE=supabase` (see `docs/supabase-login.md`).
 
 ## Mermaid source
 
@@ -39,11 +39,11 @@ flowchart LR
         F0["Landing + admin login"]:::built
         F1["Dashboard + session page"]:::built
         F3["Screen capture + frame gate"]:::built
-        F7["Holocron / Work Map view"]:::todo
-        F8["Jedi Archives marketplace"]:::todo
-        F9["Learn session"]:::todo
+        F7["Holocron / Work Map view"]:::built
+        F8["Jedi Archives marketplace"]:::built
+        F9["Learn session"]:::built
         F10["Supabase login UI"]:::built
-        F11["Yoda voice UI"]:::todo
+        F11["Yoda voice UI"]:::built
     end
     subgraph BE["Backend: FastAPI on FastAPI Cloud"]
         direction TB
@@ -52,21 +52,21 @@ flowchart LR
         B2["Storage layer"]:::built
         B3["Frames API"]:::built
         B4["Vision service + prompts"]:::built
-        B5["Question planner"]:::todo
-        B6["Step segmenter + gap finder"]:::todo
-        B7["Skill synthesizer"]:::todo
-        B8["Skills API"]:::todo
-        B9["Guardrail checker"]:::todo
-        B10["PII redaction + off the record"]:::todo
-        B11["Voice sessions"]:::todo
+        B5["Question planner"]:::built
+        B6["Step segmenter + gap finder"]:::built
+        B7["Skill synthesizer"]:::built
+        B8["Skills API"]:::built
+        B9["Guardrail checker"]:::built
+        B10["PII redaction + off the record"]:::built
+        B11["Voice sessions"]:::built
     end
     subgraph EX["External services"]
         direction TB
         X0["Supabase Auth"]:::built
         X2["Supabase Postgres + RLS"]:::built
         X4["Nebius: DeepSeek V4.1 Flash"]:::built
-        X6["Supabase Storage + Realtime"]:::todo
-        X11["ElevenLabs Agents"]:::todo
+        X6["Supabase Storage + Realtime"]:::built
+        X11["ElevenLabs Agents"]:::built
     end
 
     F0 -- login --> B0
