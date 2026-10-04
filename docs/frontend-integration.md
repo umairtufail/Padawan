@@ -110,7 +110,7 @@ Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token
 }
 ```
 
-- `capture` and `debrief` use the interviewer agent (`mode` is `live` or `debrief`), `tutor` uses the tutor agent (variables `task_title`, `skill_md`, `expert`). `gaps` (debrief) and `skill_md`/`expert` (tutor) are placeholders until the question planner and skills exist.
+- `capture` and `debrief` use the interviewer agent (`mode` is `live` or `debrief`), `tutor` uses the tutor agent (variables `task_title`, `skill_md`, `expert`, and for a learn session `skill_steps`, `skill_guardrails`, `current_step`, `current_step_idx`, see section 10). `gaps` (debrief) is a placeholder until it is wired to the planner.
 - Start the conversation in the browser with the ElevenLabs SDK, passing the `signed_url` and the `dynamic_variables` (for the JS SDK: `Conversation.startSession({ signedUrl, dynamicVariables })`). The browser never sees the API key. The signed URL is short lived: ask for a new one per conversation.
 - **The interviewer is silent until you send it a user message starting with `[ASK]`**, for example `[ASK] Why did you change the cost center from 4711 to 0400?`. It then asks that question aloud, in one sentence, and stops. In debrief mode, send `[START]` to make it begin. The tutor greets first and reacts to `[INTERVENE]`.
 - Client tools the agents may call (implement them in the page): interviewer `log_answer(question_id, summary)`, `set_off_record(on)`, `submit_teachback(confirmed, corrections)`; tutor `record_prediction(step_idx, predicted)` (return a string saying whether it was right), `show_replay(step_idx)`, `finish_learning()`.
@@ -302,3 +302,105 @@ The Holocron view (`/dashboard/skills/[id]`) and the Jedi Archives (`/dashboard/
 - "Start learning" links to `/dashboard/learn/{id}`, which is not built yet.
 
 Optional backend settings for the question planner and synthesizer (all have defaults): `NEBIUS_TEXT_MODEL` (empty = same as `NEBIUS_VLM_MODEL`), `PLANNER_TIMEOUT_S` (5), `SYNTHESIS_TIMEOUT_S` (60), `SEGMENTER_EVERY_EVENTS` (10), `SEGMENTER_EVERY_S` (20).
+
+## 10. Learn mode (the Padawan works through a Holocron, Yoda tutors)
+
+All calls need the same token as above. A **learn session** is a session of kind `learn` that points at a skill. It has its own endpoints under `/v1/learn`; the teach endpoints (`/v1/sessions/{id}/finish`, `/teachback`, ...) and `GET /v1/sessions` do **not** see learn sessions (`404` / not listed). Learn sessions are private to the learner (`404` for anyone else). Any **published** skill can be learned by any signed-in user; the author can also learn their own draft.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /v1/learn/sessions` | `{"skill_id": "uuid"}` | `201 LearnSessionOut`. `404` unknown skill or someone else's draft, `409` skill has no steps |
+| `POST /v1/learn/sessions/{id}/frames` | multipart `t_ms` + `frame` (JPEG), same as teach frames | `LearnFrameResponse` (frame response plus `verdict`) |
+| `POST /v1/learn/sessions/{id}/predictions` | `{"step_idx": 1, "predicted": "cost center 0400", "resolve": false}` | `PredictionOut`. `422` unknown `step_idx` or empty text |
+| `POST /v1/learn/sessions/{id}/predictions/{step_idx}/resolve` | none | `PredictionResult`. `409` if no prediction was recorded for that step |
+| `GET /v1/learn/sessions/{id}/report?summary=true` | none | `MasteryReport`. Any time, repeatedly, does not end the session. `summary=false` skips the model call (instant) |
+| `POST /v1/learn/sessions/{id}/finish` | none | `MasteryReport` (with summary), and the session is marked `done` |
+
+Errors for all of them: `401`, `404` unknown or not your learn session, `409` the session's skill is no longer readable, `502 {"detail": "storage unavailable"}`.
+
+### Frames and the verdict
+The frame goes through the same vision pipeline as capture (events, PII redaction, `skipped` reasons, off-the-record), minus question candidates and step grouping (`question_candidates` is always `[]`, `step_update` always `null`). When events are found, a **guardrail checker** (one text-only model call, about 1 s, budget 5 s) compares the learner's pending move with the skill and the answer is in `verdict`. `verdict` is `null` only when the frame was `skipped`.
+
+The checker is conservative: `stop` needs confidence of at least 0.8 and a real guardrail id, otherwise it is a `warn` (or `ok` below 0.5). A move that was **already saved** is never a `stop` (too late), it is a `warn` with `committed: true`. A slow, failed or garbled checker gives `ok` with `degraded: true` and never an error. It only judges what the screen shows, so it can miss a wrong move that is not visible, and it adds about 1 s on top of the vision call.
+
+What the frontend does with it:
+- `stop`: show the banner (`rule`, `expert_quote`, `reason`), send the voice agent a user message `[INTERVENE] step {step_idx}, guardrail {guardrail_id}: {rule}. {reason}`, and open `replay` when Yoda calls `show_replay` (the Master's moment: `t_ms` and `description`; `keyframe_path` is `null` for now).
+- `warn`: show a gentle hint and send `[WARN] ...` (the tutor mentions it briefly and does not stop the learner).
+- `repeated: true`: the same verdict was already given within the last 30 s. Keep the banner but **do not speak or count it again**.
+- `checked: false`: no check ran (no new events). That `ok` is not news: do not clear a visible `stop` banner because of it. Clear the banner on the next `checked: true` verdict that is `ok`.
+- `step_idx` / `step_title`: the skill step the learner is on now (use it to move the progress marker).
+
+### Predictions
+`POST .../predictions` is what the tutor tool `record_prediction(step_idx, predicted)` calls (before the step). With `"resolve": true` it also compares right away and returns the result, which is what the tool should return to Yoda (say whether it was right, then explain the reason). Without it, call `POST .../predictions/{step_idx}/resolve` after the learner did the step. Predicting again for a step replaces the earlier prediction. The comparison is against the Master's decision in the skill, judged by a model (`judged_by: "model"`) or, if the model is slow or fails, by a crude keyword match (`"heuristic"`). Predictions are most useful on `judgment` steps (`predict_prompt` is set there).
+
+### Mastery report
+Computed deterministically from stored data; only `summary` (2 to 3 sentences in Yoda's voice) is model-written and falls back to a plain sentence (`summary_source: "fallback"`). Per step, score = mean of a safety part (`1 - 0.5 per stop - 0.15 per warning`, floor 0) and, if a prediction was compared, a prediction part (1 right, 0 wrong). `result` is `mastered` at score 0.75 or more, `practise` below it, `not_reached` if the learner never got to the step. `mastery_score` (0 to 100) is the sum of the step scores over **all** steps (unreached count 0), rounded half up. `practise_next` lists steps that are not mastered, worst first, with a `why`. Time per step comes from the `t_ms` the client sends with frames; the time on the step the learner is on now is added when the report is read. Progress lives in server memory and the `learn_attempts` table; after a backend restart the time of the step that was open is lost.
+
+### Voice: tutor variables
+`POST /v1/voice/sessions` with `mode: "tutor"` and a **learn** session id now fills the tutor's variables from the skill: `skill_md` (the SKILL.md) and `expert` (the author's name), plus new `skill_steps`, `skill_guardrails`, `current_step` (for example `1. Code the invoice`) and `current_step_idx`. The original three (`task_title`, `skill_md`, `expert`) keep their meaning; for a session that is not a learn session every variable keeps a placeholder (`(no skill loaded)`, `the Master`, `(none)`, `0`). The tutor prompt uses the new variables: **re-run `uv run python -m scripts.setup_voice_agents` to push the updated prompt** to ElevenLabs.
+
+### Types
+
+```ts
+export type Verdict = "ok" | "warn" | "stop";
+export type ReplayMoment = { step_idx: number; t_ms: number; description: string; keyframe_path: string | null };
+export type GuardrailVerdict = {
+  verdict: Verdict; checked: boolean; step_idx: number | null; step_title: string;
+  guardrail_id: string | null; rule: string; expert_quote: string; reason: string; confidence: number;
+  committed: boolean; repeated: boolean; degraded: boolean; replay: ReplayMoment | null;
+};
+export type LearnFrameResponse = FrameResponse & { verdict: GuardrailVerdict | null };
+export type LearnSessionOut = { session_id: string; skill_id: string; title: string; created_at: string; current_step_idx: number; skill: SkillJson };
+export type PredictionIn = { step_idx: number; predicted: string; resolve?: boolean };
+export type PredictionResult = {
+  step_idx: number; predicted: string; correct: boolean; judged_by: "model" | "heuristic";
+  expected: string; reason: string | null; reason_quote: string | null; replay: ReplayMoment;
+};
+export type PredictionOut = { step_idx: number; predicted: string; resolved: boolean; result: PredictionResult | null };
+export type StepReport = {
+  step_idx: number; title: string; decision_type: "judgment" | "routine"; reached: boolean;
+  predicted: string | null; predicted_right: boolean | null; interventions: number; warnings: number;
+  guardrail_id: string | null; time_ms: number | null; score: number; result: "mastered" | "practise" | "not_reached";
+};
+export type PracticeItem = { step_idx: number; title: string; why: string; guardrail_id: string | null; rule: string | null };
+export type MasteryReport = {
+  session_id: string; skill_id: string; skill_title: string; mastery_score: number; steps_total: number;
+  steps_reached: number; steps_mastered: number; predictions_total: number; predictions_right: number;
+  interventions_total: number; warnings_total: number; time_total_ms: number;
+  steps: StepReport[]; practise_next: PracticeItem[]; summary: string; summary_source: "model" | "fallback" | "none";
+};
+```
+
+### Mock data (build the UI before the backend is wired in)
+
+```json
+// POST /v1/learn/sessions/{id}/frames, the moment the learner types 4711 on a 7,200 EUR compressor
+{"t_ms": 12000, "screen_summary": "SandboxERP invoice 4471, cost center 4711, asset no. empty", "events": [], "question_candidates": [], "step_update": null,
+ "latency_ms": 1400, "skipped": null,
+ "verdict": {"verdict": "stop", "checked": true, "step_idx": 1, "step_title": "Code the invoice to a cost center",
+   "guardrail_id": "g2", "rule": "Equipment over 5000 EUR never goes to opex cost center 4711", "expert_quote": "never to 4711",
+   "reason": "Wait. Equipment over 5,000 is capex, so 4711 is wrong here.", "confidence": 0.95, "committed": false,
+   "repeated": false, "degraded": false, "replay": {"step_idx": 1, "t_ms": 5000, "description": "Cost center field", "keyframe_path": null}}}
+
+// POST /v1/learn/sessions/{id}/predictions  {"step_idx": 1, "predicted": "capex, 0400", "resolve": true}
+{"step_idx": 1, "predicted": "capex, 0400", "resolved": true,
+ "result": {"step_idx": 1, "predicted": "capex, 0400", "correct": true, "judged_by": "model",
+   "expected": "Equipment over 5000 EUR is capex: cost center 0400, not opex 4711", "reason": "Equipment over 5000 is capex",
+   "reason_quote": "Equipment over five thousand is always capex",
+   "replay": {"step_idx": 1, "t_ms": 5000, "description": "Cost center field", "keyframe_path": null}}}
+
+// GET /v1/learn/sessions/{id}/report
+{"session_id": "uuid", "skill_id": "uuid", "skill_title": "Process supplier invoices", "mastery_score": 63, "steps_total": 2,
+ "steps_reached": 2, "steps_mastered": 1, "predictions_total": 2, "predictions_right": 1, "interventions_total": 1, "warnings_total": 0, "time_total_ms": 51000,
+ "steps": [
+   {"step_idx": 1, "title": "Code the invoice to a cost center", "decision_type": "judgment", "reached": true, "predicted": "cost center 4711",
+    "predicted_right": false, "interventions": 1, "warnings": 0, "guardrail_id": "g2", "time_ms": 40000, "score": 0.25, "result": "practise"},
+   {"step_idx": 2, "title": "Open the next invoice", "decision_type": "routine", "reached": true, "predicted": "open next",
+    "predicted_right": true, "interventions": 0, "warnings": 0, "guardrail_id": null, "time_ms": 11000, "score": 1.0, "result": "mastered"}],
+ "practise_next": [{"step_idx": 1, "title": "Code the invoice to a cost center",
+   "why": "Your prediction did not match the Master's decision; Yoda had to stop you 1 time(s) on: Equipment over 5000 EUR never goes to opex cost center 4711; the Master's reason: Equipment over 5000 is capex.",
+   "guardrail_id": "g2", "rule": "Equipment over 5000 EUR never goes to opex cost center 4711"}],
+ "summary": "You began well, yet coding the invoice still needs practice. Practise that step again.", "summary_source": "model"}
+```
+
+Optional backend settings for learn mode (defaults in brackets): `GUARDRAIL_TIMEOUT_S` (5), `GUARDRAIL_STOP_CONFIDENCE` (0.8), `LEARN_MODEL_TIMEOUT_S` (6, for judging predictions and the summary). Measure the checker with `cd backend && uv run python -m scripts.eval_guardrail --trials 5` (real model).

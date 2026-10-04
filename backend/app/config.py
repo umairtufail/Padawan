@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     nebius_text_model: str = ""
     # The planner runs inline on salient frames, so it gets a short budget; failure means no candidates.
     planner_timeout_s: float = 5.0
+    # Learn mode: the guardrail checker runs inline on every frame that has new events (it must stop the learner
+    # BEFORE Save), so it gets a short budget; failure or timeout means verdict "ok". A stop needs this confidence.
+    guardrail_timeout_s: float = 5.0
+    guardrail_stop_confidence: float = 0.8
+    # Judging a prediction and writing the report summary (both degrade to a deterministic fallback).
+    learn_model_timeout_s: float = 6.0
     # Synthesis is one big call (plus one retry) and runs when the author confirms the teach-back.
     synthesis_timeout_s: float = 60.0
     # Run the step segmenter after this many new events, or this many seconds, whichever comes first.

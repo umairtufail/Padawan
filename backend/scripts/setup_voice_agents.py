@@ -87,7 +87,10 @@ TUTOR_TOOLS = ["record_prediction", "show_replay", "finish_learning"]
 INTERVIEWER_VARS = {
     "mode": "live", "task_title": "a screen task", "gaps": "", "last_screen_summary": "", "pending_question": "",
 }
-TUTOR_VARS = {"task_title": "a screen task", "skill_md": "(no skill loaded)", "expert": "the Master"}
+TUTOR_VARS = {
+    "task_title": "a screen task", "skill_md": "(no skill loaded)", "expert": "the Master",
+    "skill_steps": "(none)", "skill_guardrails": "(none)", "current_step": "(none)", "current_step_idx": "0",
+}
 
 
 def agent_body(name: str, prompt_file: str, first_message: str, tool_ids: list[str], variables: dict) -> dict:

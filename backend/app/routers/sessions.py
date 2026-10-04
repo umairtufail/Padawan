@@ -136,6 +136,14 @@ async def post_frame(
     extract: VisionFn = Depends(get_vision),
     plan: PlannerFn = Depends(get_planner),
 ) -> FrameResponse:
+    return await analyse_frame(session_id, background, t_ms, frame, user, repo, extract, plan)
+
+
+async def analyse_frame(
+    session_id: str, background: BackgroundTasks, t_ms: int, frame: UploadFile, user: AuthUser, repo: SessionRepo,
+    extract: VisionFn, plan: PlannerFn, *, capture: bool = True,
+) -> FrameResponse:
+    """The vision pipeline for one frame. `capture=False` (learn mode) skips question planning and step grouping."""
     if session_id in _off_record:
         # Checked first: the frame is not read, analysed or stored, and goes nowhere.
         return FrameResponse(t_ms=t_ms, skipped="off_the_record")
@@ -204,13 +212,17 @@ async def post_frame(
             e.id = event_id
 
         # The model is only asked for questions when something salient happened on this frame.
-        candidates = await _candidates_for(user, repo, session_id, plan) if any(e.salient for e in events) else []
+        candidates = (
+            await _candidates_for(user, repo, session_id, plan) if capture and any(e.salient for e in events) else []
+        )
 
         # Steps are grouped in the background every few events (single flight per session).
-        segmenter.note_events(session_id, len(events))
-        if segmenter.due(session_id):
-            background.add_task(segmenter.run_segmenter, user, repo, session_id)
-        cur = segmenter.current_step(session_id)
+        cur = None
+        if capture:
+            segmenter.note_events(session_id, len(events))
+            if segmenter.due(session_id):
+                background.add_task(segmenter.run_segmenter, user, repo, session_id)
+            cur = segmenter.current_step(session_id)
 
         return FrameResponse(
             t_ms=t_ms, screen_summary=summary, events=events, latency_ms=result.latency_ms,
