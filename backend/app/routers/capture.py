@@ -122,6 +122,13 @@ async def _load(repo: SessionRepo, user: AuthUser, session_id: str):
     return events, utterances, questions
 
 
+async def session_gaps(repo: SessionRepo, user: AuthUser, session_id: str) -> tuple[list[dict], list]:
+    """Stored steps (segmented now if finish has not stored any) and the gap list for a session."""
+    events, utterances, questions = await _load(repo, user, session_id)
+    steps = await repo.list_steps(user, session_id) or segmenter.segment(events, utterances, questions, closed=True)
+    return steps, gaps.find_gaps(steps, events, utterances, questions, gaps.get_candidates(session_id))
+
+
 @router.post("/sessions/{session_id}/finish", response_model=FinishOut)
 async def finish_session(
     session_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),

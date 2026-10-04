@@ -85,7 +85,8 @@ INTERVIEWER_TOOLS = ["log_answer", "set_off_record", "submit_teachback"]
 TUTOR_TOOLS = ["record_prediction", "show_replay", "finish_learning"]
 
 INTERVIEWER_VARS = {
-    "mode": "live", "task_title": "a screen task", "gaps": "", "last_screen_summary": "", "pending_question": "",
+    "mode": "live", "task_title": "a screen task", "gaps": "", "steps_summary": "",
+    "last_screen_summary": "", "pending_question": "",
 }
 TUTOR_VARS = {
     "task_title": "a screen task", "skill_md": "(no skill loaded)", "expert": "the Master",

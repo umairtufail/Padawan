@@ -10,6 +10,7 @@ from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
 from ..schemas import SkillJson
 from ..services import elevenlabs, learn
+from .capture import session_gaps
 from .sessions import _summaries
 
 log = logging.getLogger("padawan.voice")
@@ -66,10 +67,12 @@ async def start_voice_session(
         variables = {
             "mode": "debrief" if body.mode == "debrief" else "live",
             "task_title": session.title,
-            "gaps": "",  # filled from the question planner's unasked candidates once it exists
+            "gaps": "",
             "last_screen_summary": summary,
             "pending_question": body.pending_question,
         }
+        if body.mode == "debrief":
+            variables.update(await _debrief_variables(repo, user, session.id))
 
     try:
         url = await signed_url(agent_id)
@@ -77,6 +80,30 @@ async def start_voice_session(
         log.error("voice session failed: %s", e)
         raise HTTPException(502, "voice service unavailable")
     return VoiceSessionResponse(signed_url=url, agent_id=agent_id, dynamic_variables=variables)
+
+
+MAX_GAPS = 8
+MAX_GAP_CHARS = 200
+MAX_STEPS = 15
+
+
+def format_gaps(gaps: list) -> str:
+    """Open gap questions as a compact numbered list: '1. [gap-2] Why this: ...?'. Empty when there are none."""
+    return "\n".join(f"{i}. [{g.id}] {g.text[:MAX_GAP_CHARS]}" for i, g in enumerate(gaps[:MAX_GAPS], 1))
+
+
+def format_steps(steps: list[dict]) -> str:
+    return "; ".join(f"{i}. {str(s.get('title', '')).strip()[:80]}" for i, s in enumerate(steps[:MAX_STEPS], 1))
+
+
+async def _debrief_variables(repo: SessionRepo, user: AuthUser, session_id: str) -> dict[str, str]:
+    """The debrief questions: the gap finder's open gaps (best first) and the ordered step titles."""
+    try:
+        steps, found = await session_gaps(repo, user, session_id)
+    except RepoError:
+        log.exception("could not load debrief data")
+        raise HTTPException(502, "storage unavailable")
+    return {"gaps": format_gaps(found), "steps_summary": format_steps(steps)}
 
 
 async def _tutor_variables(repo: SessionRepo, user: AuthUser, session) -> dict[str, str]:
