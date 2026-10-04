@@ -28,6 +28,9 @@ LLM = "gemini-2.5-flash"  # fast; change here if latency or quality needs it
 # Ignore voices in the background (other people, TV) so they do not count as the speaker's turn.
 # Reported to mute the speaker's own voice on speakerphone setups: use headphones, or set False.
 BACKGROUND_VOICE_DETECTION = True
+# Seconds of user silence before ElevenLabs gives the agent a turn. 30 is the maximum (it cannot be turned off);
+# the capture mic is muted between questions, so a shorter value makes Yoda speak up over and over.
+TURN_TIMEOUT_S = 30
 
 
 def _str(desc: str) -> dict:
@@ -118,7 +121,7 @@ def agent_body(name: str, prompt_file: str, first_message: str, tool_ids: list[s
                 "stability": 0.6, "speed": 0.95,
             },
             # Patient turn-taking: the app drives questions, the agent must not jump in.
-            "turn": {"turn_eagerness": "patient"},
+            "turn": {"turn_eagerness": "patient", "turn_timeout": TURN_TIMEOUT_S},
             "vad": {"background_voice_detection": BACKGROUND_VOICE_DETECTION},
             "conversation": {
                 "max_duration_seconds": 3600,

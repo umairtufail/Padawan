@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PauseController, type PauseSignals } from "./pause-controller";
+import { DEFAULT_PRESENCE_CONFIG, PauseController, presenceAction, type PauseSignals, type PresenceSignals } from "./pause-controller";
 import { candidatesFromResponse, questionsForResponse, screenUpdateText, stubQuestionFromEvent, UpdateThrottle } from "./question-source";
 import type { FrameResponse, PadawanEvent } from "./api";
 
@@ -199,5 +199,46 @@ describe("question source", () => {
     expect(t.take(0)).toBe(true);
     expect(t.take(1999)).toBe(false);
     expect(t.take(2000)).toBe(true);
+  });
+});
+
+describe("presence", () => {
+  const { checkInAfterMs, restAfterMs } = DEFAULT_PRESENCE_CONFIG;
+  const here = (over: Partial<PresenceSignals> = {}): PresenceSignals => ({
+    lastActivityAt: T0,
+    checkedInAt: null,
+    connected: true,
+    agentSpeaking: false,
+    awaitingAnswer: false,
+    offRecord: false,
+    ...over,
+  });
+
+  it("does nothing while the person was active recently", () => {
+    expect(presenceAction(T0 + checkInAfterMs - 1, here())).toBe("none");
+  });
+
+  it("checks in once after a long still screen with no speech", () => {
+    expect(presenceAction(T0 + checkInAfterMs, here())).toBe("check_in");
+  });
+
+  it("never checks in while Yoda speaks, waits for an answer, is offline or off the record", () => {
+    const late = T0 + checkInAfterMs * 2;
+    expect(presenceAction(late, here({ agentSpeaking: true }))).toBe("none");
+    expect(presenceAction(late, here({ awaitingAnswer: true }))).toBe("none");
+    expect(presenceAction(late, here({ connected: false }))).toBe("none");
+    expect(presenceAction(late, here({ offRecord: true }))).toBe("none");
+  });
+
+  it("rests only when nothing happened after the check-in", () => {
+    const checkedInAt = T0 + checkInAfterMs;
+    expect(presenceAction(checkedInAt + restAfterMs - 1, here({ checkedInAt }))).toBe("none");
+    expect(presenceAction(checkedInAt + restAfterMs, here({ checkedInAt }))).toBe("rest");
+  });
+
+  it("starts over when the person moves or speaks after the check-in", () => {
+    const checkedInAt = T0 + checkInAfterMs;
+    const moved = here({ checkedInAt, lastActivityAt: checkedInAt + 1000 });
+    expect(presenceAction(checkedInAt + restAfterMs, moved)).toBe("none");
   });
 });

@@ -62,6 +62,37 @@ export type PauseSignals = {
   offRecord: boolean;
 };
 
+export type PresenceConfig = {
+  /** No screen change and no speech for this long: Yoda checks in once. */
+  checkInAfterMs: number;
+  /** Still nothing this long after the check-in: Yoda rests (the voice session ends, capture goes on). */
+  restAfterMs: number;
+};
+
+export const DEFAULT_PRESENCE_CONFIG: PresenceConfig = { checkInAfterMs: 180_000, restAfterMs: 120_000 };
+
+export type PresenceSignals = {
+  /** Latest sign that the person is there: a screen change, their speech, or Yoda connecting. */
+  lastActivityAt: number;
+  /** When Yoda checked in, or null if he has not since the last activity. */
+  checkedInAt: number | null;
+  connected: boolean;
+  agentSpeaking: boolean;
+  awaitingAnswer: boolean;
+  offRecord: boolean;
+};
+
+export type PresenceAction = "none" | "check_in" | "rest";
+
+/** Is the person away? Silence alone never counts: only a still screen AND no speech for a long time. */
+export function presenceAction(now: number, s: PresenceSignals, cfg: PresenceConfig = DEFAULT_PRESENCE_CONFIG): PresenceAction {
+  if (!s.connected || s.offRecord || s.agentSpeaking) return "none";
+  if (s.checkedInAt === null || s.lastActivityAt > s.checkedInAt) {
+    return !s.awaitingAnswer && now - s.lastActivityAt >= cfg.checkInAfterMs ? "check_in" : "none";
+  }
+  return now - s.checkedInAt >= cfg.restAfterMs ? "rest" : "none";
+}
+
 export type Check = { id: string; ok: boolean; detail: string };
 
 export type Decision =

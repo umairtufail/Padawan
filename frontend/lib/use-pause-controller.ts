@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FrameResponse } from "./api";
-import { PauseController, type Check, type PauseConfig, type QuestionCandidate } from "./pause-controller";
+import {
+  DEFAULT_PRESENCE_CONFIG, PauseController, presenceAction,
+  type Check, type PauseConfig, type PresenceConfig, type QuestionCandidate,
+} from "./pause-controller";
 import { curiosityQuestion, questionsForResponse, screenUpdateText, UpdateThrottle } from "./question-source";
 
 export type TraceEntry = {
   id: number;
   at: number;
-  kind: "ask" | "manual" | "skip" | "queued" | "context";
+  kind: "ask" | "manual" | "skip" | "queued" | "context" | "presence";
   text: string;
   /** The rules as they were at that moment (for "why now"). */
   checks?: Check[];
@@ -28,7 +31,12 @@ type Inputs = {
   sendContext: (text: string) => void;
   /** Called after a question was sent to Yoda (report it to the backend). `checks` is the "why now" trace. */
   onAsked?: (candidate: QuestionCandidate, info: { manual: boolean; checks?: Check[] }) => void;
+  /** Yoda asks whether the person is still there; returns false if he could not. */
+  checkIn?: () => boolean;
+  /** Nothing happened after the check-in either: end the voice session (capture goes on). */
+  rest?: () => void;
   config?: Partial<PauseConfig>;
+  presence?: Partial<PresenceConfig>;
 };
 
 const TICK_MS = 500;
@@ -45,6 +53,9 @@ const MAX_TRACE = 40;
  */
 export function usePauseController(inputs: Inputs) {
   const [controller] = useState(() => new PauseController(inputs.config));
+  const [presenceConfig] = useState(() => ({ ...DEFAULT_PRESENCE_CONFIG, ...inputs.presence }));
+  const connectedAt = useRef<number | null>(null);
+  const checkedInAt = useRef<number | null>(null);
   const latest = useRef(inputs);
   const throttle = useRef(new UpdateThrottle(2000));
   const seq = useRef(0);
@@ -138,9 +149,39 @@ export function usePauseController(inputs: Inputs) {
           log("skip", `Waiting: ${why}`, decision.checks);
         }
       }
+
+      // Presence: only a still screen and no speech for minutes means "away". Yoda checks in once, then rests.
+      if (!s.connected) {
+        connectedAt.current = null;
+        checkedInAt.current = null;
+      } else if (connectedAt.current === null) {
+        connectedAt.current = now;
+      }
+      if (decision.kind === "ask" || connectedAt.current === null) return;
+      const lastActivityAt = Math.max(s.lastFrameChangeAt ?? 0, s.lastExpertSpeechAt ?? 0, connectedAt.current);
+      if (checkedInAt.current !== null && lastActivityAt > checkedInAt.current) {
+        checkedInAt.current = null;
+        log("presence", "The Master is back.");
+      }
+      const action = presenceAction(now, {
+        lastActivityAt,
+        checkedInAt: checkedInAt.current,
+        connected: s.connected,
+        agentSpeaking: s.agentSpeaking,
+        awaitingAnswer: s.awaitingAnswer,
+        offRecord: s.offRecord,
+      }, presenceConfig);
+      if (action === "check_in" && s.checkIn?.()) {
+        checkedInAt.current = now;
+        log("presence", "Nothing moved and nobody spoke for a while: Yoda checks in.");
+      } else if (action === "rest") {
+        checkedInAt.current = null;
+        log("presence", "No reply to the check-in: Yoda rests. Capture goes on.");
+        s.rest?.();
+      }
     }, TICK_MS);
     return () => window.clearInterval(timer);
-  }, [log, controller]);
+  }, [log, controller, presenceConfig]);
 
   /** The "Ask Yoda" button: ask now, ignoring the pause rules (the person decided). Uses the best waiting question. */
   const askNow = useCallback(
