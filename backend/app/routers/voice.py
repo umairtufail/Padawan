@@ -37,6 +37,28 @@ class VoiceSessionResponse(BaseModel):
     dynamic_variables: dict[str, str]
 
 
+@router.post("/voice/readiness", response_model=VoiceSessionResponse)
+async def voice_readiness(
+    _user: AuthUser = Depends(current_user),
+    signed_url: SignedUrlFn = Depends(get_signed_url_fn),
+) -> VoiceSessionResponse:
+    """Signed URL for a short, non-persistent browser microphone and Yoda preflight."""
+    agent_id = settings.elevenlabs_interviewer_agent_id
+    variables = {
+        "mode": "live",
+        "task_title": "voice readiness check",
+        "gaps": "",
+        "last_screen_summary": "",
+        "pending_question": "",
+    }
+    try:
+        url = await signed_url(agent_id)
+    except elevenlabs.ElevenLabsError as e:
+        log.error("voice readiness failed: %s", e)
+        raise HTTPException(502, "voice service unavailable")
+    return VoiceSessionResponse(signed_url=url, agent_id=agent_id, dynamic_variables=variables)
+
+
 @router.post("/voice/sessions", response_model=VoiceSessionResponse)
 async def start_voice_session(
     body: VoiceSessionRequest,

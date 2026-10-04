@@ -3,17 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { deliverCapturedFrame, type CapturedFramePayload } from "../lib/frame-delivery";
 import { ChangeDetector, type DetectorDecision, type FrameDiffResult } from "../lib/frame-diff";
+import { assertNotPadawanSelfCapture, screenShareOptions } from "../lib/screen-share";
 import YodaFigure from "../components/yoda-figure";
 import { btnGhost, btnPrimary, Chip, Label } from "../components/ui";
 
 type CaptureStatus = "idle" | "requesting" | "sharing" | "stopped" | "error";
-
-type DisplayMediaOptionsWithSelfExclusion = Omit<DisplayMediaStreamOptions, "video"> & {
-  selfBrowserSurface?: "include" | "exclude";
-  // `cursor` is part of the spec but missing from the DOM typings. "never" keeps the mouse pointer out of the
-  // stream, so a moving cursor never looks like a change on the screen.
-  video: MediaTrackConstraints & { cursor?: "always" | "motion" | "never" };
-};
 
 type MediaTrackSettingsWithSurface = MediaTrackSettings & {
   displaySurface?: "browser" | "window" | "monitor";
@@ -148,6 +142,7 @@ export default function ScreenCapture({ onFrame, initialStream = null, embedded 
   /** Starts monitoring a stream (from the picker below, or handed over by the Start button). */
   const attachStream = useCallback(
     async (stream: MediaStream) => {
+      assertNotPadawanSelfCapture(stream);
       const videoTrack = stream.getVideoTracks()[0];
       const displaySurface = (videoTrack?.getSettings() as MediaTrackSettingsWithSurface | undefined)?.displaySurface;
 
@@ -201,12 +196,7 @@ export default function ScreenCapture({ onFrame, initialStream = null, embedded 
     setStatus("requesting");
 
     try {
-      const displayMediaOptions: DisplayMediaOptionsWithSelfExclusion = {
-        video: { frameRate: { ideal: 15, max: 30 }, cursor: "never" },
-        audio: false,
-        selfBrowserSurface: "exclude",
-      };
-      const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+      const stream = await navigator.mediaDevices.getDisplayMedia(screenShareOptions());
       await attachStream(stream);
     } catch (error) {
       streamRef.current?.getTracks().forEach((track) => track.stop());

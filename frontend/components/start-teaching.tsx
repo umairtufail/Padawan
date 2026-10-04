@@ -4,13 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, createTeachSession, MOCK } from "../lib/api";
 import { stashStream } from "../lib/capture-handoff";
+import { assertNotPadawanSelfCapture, screenShareOptions } from "../lib/screen-share";
 import { btnPrimary, ErrorBox } from "./ui";
-
-type DisplayMediaOptionsWithSelfExclusion = Omit<DisplayMediaStreamOptions, "video"> & {
-  selfBrowserSurface?: "include" | "exclude";
-  // "never" keeps the mouse pointer out of the stream (see app/screen-capture.tsx).
-  video: MediaTrackConstraints & { cursor?: "always" | "motion" | "never" };
-};
 
 type Props = {
   /** Name of the new session. */
@@ -52,12 +47,8 @@ export default function StartTeaching({ title = "New task", label = "Start teach
     setPhase("choosing");
     let stream: MediaStream;
     try {
-      const options: DisplayMediaOptionsWithSelfExclusion = {
-        video: { frameRate: { ideal: 15, max: 30 }, cursor: "never" },
-        audio: false,
-        selfBrowserSurface: "exclude",
-      };
-      stream = await navigator.mediaDevices.getDisplayMedia(options);
+      stream = await navigator.mediaDevices.getDisplayMedia(screenShareOptions());
+      assertNotPadawanSelfCapture(stream);
     } catch (err) {
       setPhase("idle");
       if (err instanceof DOMException && err.name === "NotAllowedError") {

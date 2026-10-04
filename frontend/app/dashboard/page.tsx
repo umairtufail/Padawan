@@ -10,6 +10,7 @@ import { pickContinue, progressLabel, type LearnSessionRow } from "../../lib/lea
 import { btnGhost, btnPrimary, Chip, ErrorBox, Label } from "../../components/ui";
 import StartTeaching from "../../components/start-teaching";
 import YodaFigure from "../../components/yoda-figure";
+import VoiceReadinessCheck from "../../components/voice-readiness-check";
 
 type Backend = "checking" | "up" | "down";
 
@@ -64,6 +65,8 @@ export default function Overview() {
           API: {MOCK ? "mock mode (no network)" : API_URL}
         </span>
       </div>
+
+      <VoiceReadinessCheck />
 
       <section className="grid gap-5 md:grid-cols-2" aria-label="What would you like to do">
         <article className="flex flex-col rounded-2xl border border-jade/30 bg-surface/90 p-7">

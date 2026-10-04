@@ -70,6 +70,19 @@ async def test_capture_returns_interviewer_url_and_variables():
     }
 
 
+async def test_readiness_returns_interviewer_url_without_creating_a_session():
+    calls = []
+    fake_elevenlabs(calls)
+    async with client() as c:
+        r = await c.post("/v1/voice/readiness")
+    assert r.status_code == 200
+    body = r.json()
+    assert calls == ["agent_interviewer"]
+    assert body["agent_id"] == "agent_interviewer"
+    assert body["signed_url"].startswith("wss://fake.example/")
+    assert body["dynamic_variables"]["task_title"] == "voice readiness check"
+
+
 async def test_debrief_and_tutor_modes():
     calls = []
     fake_elevenlabs(calls)
