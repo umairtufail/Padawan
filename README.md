@@ -16,6 +16,19 @@ Built for the Hack-Nation 7th Global AI Hackathon, challenge 01 "The AI Apprenti
 
 > Vercel builds are rate limited on the free plan at times, so the live frontend can lag behind `main`. Check the deployment status on the commit.
 
+## Screenshots
+
+Real screenshots of the running app, captured in the frontend's mock mode (`NEXT_PUBLIC_API_MOCK=1`). All data is mock data: no real people, emails or keys, and Yoda's voice is scripted. They show the screens, not model quality.
+
+| | | |
+|---|---|---|
+| [![Teach: Yoda panel with captions, steps and the frame timeline](docs/screenshots/04-teach-session.webp)](docs/screenshots/04-teach-session.webp) | [![Debrief: gap questions answered, Yoda explains the process back](docs/screenshots/05-debrief.webp)](docs/screenshots/05-debrief.webp) | [![Holocron: draft with the work map, reasons and guardrails](docs/screenshots/06-holocron-work-map.webp)](docs/screenshots/06-holocron-work-map.webp) |
+| **Teach:** the Master works, Yoda asks why at a pause; captions, steps and the frame timeline fill in. | **Debrief:** open gap questions are answered, then Yoda explains the process back (teach-back). | **Holocron:** the draft skill as a work map with steps, the Master's reasons and a stop-and-ask guardrail. |
+| [![Jedi Archives with stats, sort and domain chips](docs/screenshots/07-jedi-archives.webp)](docs/screenshots/07-jedi-archives.webp) | [![Learn: the red STOP banner](docs/screenshots/08-learn-stop-banner.webp)](docs/screenshots/08-learn-stop-banner.webp) | [![Mastery report](docs/screenshots/09-mastery-report.webp)](docs/screenshots/09-mastery-report.webp) |
+| **Archives:** published Holocrons with learner and mastery stats, search, sort and domain chips. | **Learn:** the Padawan is about to break a guardrail and Yoda stops them with the red banner. | **Report:** the mastery report after the lesson: score, steps, predictions, stops, what to practise. |
+
+More: [landing](docs/screenshots/01-landing.webp), [login](docs/screenshots/02-login.webp), [dashboard](docs/screenshots/03-dashboard.webp), [My learning](docs/screenshots/10-my-learning.webp), [phone width (Archives)](docs/screenshots/11-archives-mobile.webp).
+
 ## How it works
 
 ```
