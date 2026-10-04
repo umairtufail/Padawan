@@ -177,7 +177,7 @@ function handleUnauthorized() {
 
 // ---------- low-level request ----------
 
-async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: boolean; text?: boolean } = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: boolean; text?: boolean } = {}): Promise<T> {
   const auth = opts.auth !== false;
   const headers = new Headers(init.headers);
   if (auth) await syncSupabaseToken();
