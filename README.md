@@ -94,6 +94,8 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 
 The frontend developer's guide (formats, a TypeScript client, curl examples) is [`docs/frontend-integration.md`](docs/frontend-integration.md).
 
+Use cases beyond forms (video editor, Figma handoff, support triage, dashboards, releases and more, with a demo ranking): [`docs/use-cases.md`](docs/use-cases.md).
+
 Demo and pitch: the runbook with pre-flight checklist, 3-minute script, fallback table and judge Q&A is [`docs/demo.md`](docs/demo.md). `cd backend && uv run python -m scripts.seed_demo` seeds a published sample Holocron so Learn mode works even if Capture fails.
 
 ## API
