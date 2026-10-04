@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildWorkMap, countGuardrails, filterSkills, formatTimestamp, skillToMarkdown, slugify,
+  buildWorkMap, countGuardrails, domainOptions, filterByDomain, filterSkills, formatTimestamp, learnersLabel, masteryLabel,
+  skillToMarkdown, slugify, sortSkills,
   type SkillJson, type SkillSummary,
 } from "./skills";
 
@@ -33,10 +34,62 @@ describe("formatTimestamp", () => {
   });
 });
 
+function row(id: string, over: Partial<SkillSummary> = {}): SkillSummary {
+  return {
+    id, title: id, description: "", domain: null, language: "en", status: "published", author: { id: "a", name: "A" },
+    steps_count: 1, guardrails_count: 0, created_at: "2026-01-01T00:00:00Z", published_at: null, learners_count: 0, avg_mastery: null, ...over,
+  };
+}
+
+describe("marketplace helpers", () => {
+  const a = row("a", { published_at: "2026-03-01T00:00:00Z", learners_count: 2, avg_mastery: 60, domain: "Finance" });
+  const b = row("b", { published_at: "2026-02-01T00:00:00Z", learners_count: 9, avg_mastery: null, domain: "Finance" });
+  const c = row("c", { published_at: "2026-01-15T00:00:00Z", learners_count: 2, avg_mastery: 90, domain: "Procurement" });
+  const d = row("d", { created_at: "2026-04-01T00:00:00Z", domain: " " });
+  const ids = (l: SkillSummary[]) => l.map((x) => x.id).join("");
+
+  it("sorts newest by published_at, falling back to created_at", () => {
+    expect(ids(sortSkills([a, b, c, d], "newest"))).toBe("dabc");
+  });
+  it("sorts popular by learners, ties by mastery then newest", () => {
+    expect(ids(sortSkills([a, b, c, d], "popular"))).toBe("bcad");
+  });
+  it("sorts by mastery with null last", () => {
+    expect(ids(sortSkills([a, b, c, d], "mastery"))).toBe("cabd");
+  });
+  it("does not mutate its input", () => {
+    const input = [a, b, c];
+    sortSkills(input, "popular");
+    expect(ids(input)).toBe("abc");
+  });
+  it("builds domain options biggest first and skips blanks", () => {
+    expect(domainOptions([a, b, c, d])).toEqual([{ domain: "Finance", count: 2 }, { domain: "Procurement", count: 1 }]);
+    expect(domainOptions([])).toEqual([]);
+  });
+  it("filters by domain; null means all", () => {
+    expect(ids(filterByDomain([a, b, c], "Finance"))).toBe("ab");
+    expect(ids(filterByDomain([a, b, c], null))).toBe("abc");
+    expect(filterByDomain([a, b, c], "Nope")).toEqual([]);
+  });
+  it("labels learners and hides zero", () => {
+    expect(learnersLabel(0)).toBeNull();
+    expect(learnersLabel(undefined)).toBeNull();
+    expect(learnersLabel(1)).toBe("1 learner");
+    expect(learnersLabel(12)).toBe("12 learners");
+  });
+  it("labels mastery and hides null or zero", () => {
+    expect(masteryLabel(null)).toBeNull();
+    expect(masteryLabel(0)).toBeNull();
+    expect(masteryLabel(71.6)).toBe("72% avg mastery");
+    expect(masteryLabel(140)).toBe("100% avg mastery");
+  });
+});
+
 describe("filterSkills", () => {
   const mk = (title: string, name: string, domain: string | null): SkillSummary => ({
     id: title, title, description: "desc", domain, language: "en", status: "published",
     author: { id: name, name }, steps_count: 1, guardrails_count: 0, created_at: "", published_at: null,
+    learners_count: 0, avg_mastery: null,
   });
   const list = [mk("Invoices", "Sabine", "finance"), mk("Vendor onboarding", "Marc", "procurement")];
   it("returns all for an empty query", () => expect(filterSkills(list, "  ")).toHaveLength(2));

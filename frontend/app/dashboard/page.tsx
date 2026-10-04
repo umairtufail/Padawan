@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   API_URL, MOCK, ApiError, health, listSessions, type SessionSummary,
 } from "../../lib/api";
-import { btnGhost, Chip, ErrorBox, Label } from "../../components/ui";
+import { listLearnSessions } from "../../lib/learn-api";
+import { pickContinue, progressLabel, type LearnSessionRow } from "../../lib/learning";
+import { btnGhost, btnPrimary, Chip, ErrorBox, Label } from "../../components/ui";
 import StartTeaching from "../../components/start-teaching";
 import YodaFigure from "../../components/yoda-figure";
 
@@ -40,6 +42,17 @@ export default function Overview() {
     void load();
   }, [load]);
 
+  // The call to action is optional: if the learn list fails, it falls back to "Browse the Archives".
+  const [learnRows, setLearnRows] = useState<LearnSessionRow[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    listLearnSessions().then((r) => alive && setLearnRows(r)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const resume = learnRows ? pickContinue(learnRows) : null;
+
   const statusText = backend === "checking" ? "Checking backend…" : backend === "up" ? "Backend reachable" : "Backend unreachable";
   const statusTone = backend === "up" ? "jade" : backend === "down" ? "danger" : "info";
 
@@ -65,15 +78,34 @@ export default function Overview() {
           <StartTeaching className="mt-6 self-start" />
         </article>
 
-        <article className="flex flex-col rounded-2xl border border-line bg-surface/50 p-7">
-          <Label>For the Padawan</Label>
-          <h2 className="mt-4 font-heading text-3xl font-black text-muted">Learn from Yoda</h2>
-          <p className="mt-2 flex-1 leading-relaxed text-muted">
-            Yoda tutors you through a Holocron and stops you before you break a guardrail.
-          </p>
-          <Link href="/dashboard/skills" className={`${btnGhost} mt-6 self-start`}>
-            Pick a Holocron
-          </Link>
+        <article className="flex flex-col rounded-2xl border border-gold/30 bg-surface/90 p-7" data-testid="learn-cta">
+          <Label className="!text-gold">For the Padawan</Label>
+          {resume ? (
+            <>
+              <h2 className="mt-4 font-heading text-3xl font-black text-gold">Continue learning</h2>
+              <p className="mt-2 flex-1 leading-relaxed text-muted">
+                You left <span className="font-semibold text-fg">{resume.skill_title}</span> at {progressLabel(resume)}.
+                Yoda starts a fresh lesson on it.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link href={`/dashboard/learn/${encodeURIComponent(resume.skill_id)}`} className={btnPrimary}>Continue learning</Link>
+                <Link href="/dashboard/learning" className={btnGhost}>My learning</Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-4 font-heading text-3xl font-black text-gold">Browse the Archives</h2>
+              <p className="mt-2 flex-1 leading-relaxed text-muted">
+                {learnRows && learnRows.length > 0
+                  ? "You finished your lessons. Find the next Holocron and Yoda will tutor you through it."
+                  : "Yoda tutors you through a Holocron a Master taught him and stops you before you break a guardrail."}
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link href="/dashboard/skills" className={btnPrimary}>Browse the Archives</Link>
+                {learnRows && learnRows.length > 0 && <Link href="/dashboard/learning" className={btnGhost}>My learning</Link>}
+              </div>
+            </>
+          )}
         </article>
       </section>
 

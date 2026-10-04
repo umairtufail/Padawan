@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ApiError, exportSkill, publishSkill, type SkillDetail, type SkillStep } from "../lib/api";
 import { formatTimestamp, guardrailLabel, guardrailSourceLabel } from "../lib/skills";
 import { btnGhost, btnPrimary, Chip, ErrorBox, Label } from "./ui";
-import { formatDate, StatusChip, useSkill } from "./skill-parts";
+import { formatDate, SkillStats, StatusChip, UnpublishControl, useIsMine, useSkill } from "./skill-parts";
 import WorkMap from "./work-map";
 import YodaFigure from "./yoda-figure";
 
@@ -95,6 +95,7 @@ function download(filename: string, text: string) {
 
 export default function HolocronView({ id }: { id: string }) {
   const { skill, setSkill, error, notFound } = useSkill(id);
+  const isMine = useIsMine(id);
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState<"" | "publish" | "export">("");
   const [actionError, setActionError] = useState("");
@@ -147,26 +148,28 @@ export default function HolocronView({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={skill.status} />
             {skill.domain && <Chip tone="info">{skill.domain}</Chip>}
-            <Chip tone="muted">{skill.steps_count} steps</Chip>
-            <Chip tone="danger">{skill.guardrails_count} {skill.guardrails_count === 1 ? "guardrail" : "guardrails"}</Chip>
           </div>
+          <div className="mt-2"><SkillStats skill={skill} /></div>
           <h1 className="mt-2 font-heading text-2xl font-black text-gold sm:text-3xl">{skill.title}</h1>
           <p className="mt-1 text-muted">{skill.description}</p>
           <p className="mt-2 font-mono text-xs text-muted">
             Taught by {skill.author.name} · {formatDate(skill.published_at ?? skill.created_at)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:flex-col">
+        <div className="flex flex-wrap gap-2 sm:w-52 sm:flex-col sm:items-stretch">
           {skill.status === "draft" ? (
             <button type="button" className={btnPrimary} onClick={() => void onPublish()} disabled={busy !== "" || skill.steps_count < 1}>
               {busy === "publish" ? "Publishing…" : "Publish to the Archives"}
             </button>
           ) : (
-            <Link href={`/dashboard/learn/${encodeURIComponent(skill.id)}`} className={btnPrimary}>Start learning</Link>
+            <Link href={`/dashboard/learn/${encodeURIComponent(skill.id)}`} className={`${btnPrimary} !px-6 !py-3 !text-base`}>
+              Start learning
+            </Link>
           )}
           <button type="button" className={btnGhost} onClick={() => void onExport()} disabled={busy !== ""}>
             {busy === "export" ? "Exporting…" : "Export SKILL.md"}
           </button>
+          {skill.status === "published" && isMine && <UnpublishControl skillId={skill.id} onDone={setSkill} />}
         </div>
       </header>
 

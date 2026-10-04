@@ -1,7 +1,16 @@
 /** Realistic sample Holocrons for NEXT_PUBLIC_API_MOCK=1. Same shape as the skill JSON contract (Notion page 03). */
 import { detailFromSkill, type SkillDetail, type SkillJson } from "./skills";
 
-function detail(json: SkillJson, extra: { status: "draft" | "published"; domain: string; published_at: string | null }): SkillDetail {
+function detail(
+  json: SkillJson,
+  extra: {
+    status: "draft" | "published";
+    domain: string;
+    published_at: string | null;
+    learners_count?: number;
+    avg_mastery?: number | null;
+  },
+): SkillDetail {
   return detailFromSkill(json, extra);
 }
 
@@ -77,7 +86,7 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
       ],
       teachback: { confirmed: true, corrections: ["Hold applies to all suppliers who double-bill in December"] },
     },
-    { status: "published", domain: "Finance", published_at: iso(day) },
+    { status: "published", domain: "Finance", published_at: iso(day), learners_count: 14, avg_mastery: 78 },
   );
 
   const vendor = detail(
@@ -125,7 +134,7 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
       global_guardrails: [],
       teachback: { confirmed: true, corrections: [] },
     },
-    { status: "published", domain: "Procurement", published_at: iso(4 * day) },
+    { status: "published", domain: "Procurement", published_at: iso(4 * day), learners_count: 5, avg_mastery: 52 },
   );
 
   const draft = detail(
@@ -164,5 +173,51 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
     { status: "draft", domain: "Finance", published_at: null },
   );
 
-  return [invoices, vendor, draft];
+  const quickStep = (idx: number, title: string, summary: string, rule?: string): SkillJson["steps"][number] => ({
+    idx, title,
+    screen_moment: { keyframe_path: null, t_ms: idx * 45_000, description: summary },
+    decision: { type: rule ? "judgment" : "routine", summary },
+    reason: { text: `${title}: this is how it stays auditable.`, quote: "That is how we keep it clean.", t_ms: idx * 45_000 + 3_000 },
+    guardrails: rule ? [{ id: `g${idx}`, type: "stop_and_ask", rule, quote: rule, t_ms: idx * 45_000 + 5_000, source: "expert" }] : [],
+    predict_prompt: rule ? `What do you do at "${title}"?` : null,
+  });
+
+  const bank = detail(
+    {
+      id: "skill-bank",
+      title: "Reconcile the bank statement",
+      description: "Priya's weekly routine for matching bank lines to open items, and what to do with unmatched payments.",
+      author: { id: "u-priya", name: "Priya" },
+      created_at: iso(9 * day),
+      language: "en",
+      steps: [
+        quickStep(1, "Import the statement", "Imported the CSV from the bank portal"),
+        quickStep(2, "Auto-match open items", "Ran the auto-match and reviewed the proposals", "Match below 90 percent confidence: never accept blindly"),
+        quickStep(3, "Park unmatched payments", "Moved unmatched lines to the clearing account", "Unmatched over 10,000 EUR: stop and ask the controller"),
+      ],
+      global_guardrails: [],
+      teachback: { confirmed: true, corrections: [] },
+    },
+    { status: "published", domain: "Finance", published_at: iso(8 * day), learners_count: 2, avg_mastery: 91 },
+  );
+
+  const shipping = detail(
+    {
+      id: "skill-shipping",
+      title: "Release a held shipment",
+      description: "Tomas explains how to check the customs hold, confirm the paperwork and release a shipment from the warehouse system.",
+      author: { id: "u-tomas", name: "Tomas" },
+      created_at: iso(day / 2),
+      language: "en",
+      steps: [
+        quickStep(1, "Find the held shipment", "Filtered the dock board by status Held"),
+        quickStep(2, "Check the customs paperwork", "Opened the customs tab and checked the HS code", "HS code missing: stop and ask the customs desk"),
+      ],
+      global_guardrails: [],
+      teachback: { confirmed: true, corrections: [] },
+    },
+    { status: "published", domain: "Logistics", published_at: iso(day / 3) },
+  );
+
+  return [invoices, vendor, bank, shipping, draft];
 }

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listSkills } from "../lib/api";
-import { filterSkills, type SkillSummary } from "../lib/skills";
-import { Chip, ErrorBox, Label } from "./ui";
-import { formatDate, StatusChip } from "./skill-parts";
+import { domainOptions, filterByDomain, filterSkills, SORT_OPTIONS, type SkillSort, type SkillSummary } from "../lib/skills";
+import { btnGhost, Chip, ErrorBox, Label } from "./ui";
+import { formatDate, SkillStats, StatusChip } from "./skill-parts";
 import YodaFigure from "./yoda-figure";
 
 function SkillCard({ skill }: { skill: SkillSummary }) {
@@ -21,12 +21,9 @@ function SkillCard({ skill }: { skill: SkillSummary }) {
         </div>
         <h3 className="mt-3 font-heading text-lg font-bold text-fg">{skill.title}</h3>
         <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted">{skill.description}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Chip tone="muted">{skill.steps_count} steps</Chip>
-          <Chip tone="danger">{skill.guardrails_count} guardrails</Chip>
-        </div>
+        <div className="mt-4"><SkillStats skill={skill} /></div>
         <p className="mt-3 font-mono text-xs text-muted">
-          {skill.author.name} · {formatDate(skill.published_at ?? skill.created_at)}
+          Taught by {skill.author.name} · {formatDate(skill.published_at ?? skill.created_at)}
         </p>
       </Link>
     </li>
@@ -35,31 +32,57 @@ function SkillCard({ skill }: { skill: SkillSummary }) {
 
 export default function ArchivesView() {
   const [tab, setTab] = useState<"published" | "mine">("published");
+  const [sort, setSort] = useState<SkillSort>("newest");
+  const [domain, setDomain] = useState<string | null>(null);
   const [skills, setSkills] = useState<SkillSummary[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const latest = useRef(0);
 
-  const load = useCallback(async (which: "published" | "mine") => {
+  // The previous list stays on screen while a new sort or tab loads, so the domain chips do not flash away.
+  const load = useCallback(async (which: "published" | "mine", order: SkillSort) => {
+    const mine = ++latest.current;
     setError("");
-    setSkills(null);
+    setLoading(true);
     try {
-      setSkills(await listSkills({ mine: which === "mine" }));
+      const rows = await listSkills({ mine: which === "mine", sort: order });
+      if (mine === latest.current) setSkills(rows);
     } catch (err) {
-      if (!(err instanceof ApiError && err.status === 401)) {
+      if (mine === latest.current && !(err instanceof ApiError && err.status === 401)) {
         setError(err instanceof Error ? err.message : "Could not open the Archives.");
         setSkills([]);
       }
+    } finally {
+      if (mine === latest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data load when the tab changes
-    void load(tab);
-  }, [load, tab]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data load when the tab or the sort changes
+    void load(tab, sort);
+  }, [load, tab, sort]);
 
-  const shown = useMemo(() => (skills ? filterSkills(skills, query) : []), [skills, query]);
+  const domains = useMemo(() => domainOptions(skills ?? []), [skills]);
+  const activeDomain = domain && domains.some((d) => d.domain === domain) ? domain : null;
+  const shown = useMemo(
+    () => (skills ? filterByDomain(filterSkills(skills, query), activeDomain) : []),
+    [skills, query, activeDomain],
+  );
+  const filtering = Boolean(query.trim() || activeDomain);
+
   const tabCls = (on: boolean) =>
     `rounded-md px-3 py-1.5 text-sm font-semibold ${on ? "bg-surface-2 text-gold" : "text-muted hover:text-fg"}`;
+  const chipCls = (on: boolean) =>
+    `rounded-full border px-3 py-1 font-mono text-xs transition focus-visible:outline-2 focus-visible:outline-info ${
+      on ? "border-gold bg-gold/10 text-gold" : "border-line text-muted hover:border-muted hover:text-fg"
+    }`;
+
+  function switchTab(next: "published" | "mine") {
+    if (next === tab) return;
+    setDomain(null);
+    setTab(next);
+  }
 
   return (
     <div className="space-y-6">
@@ -74,14 +97,14 @@ export default function ArchivesView() {
 
       <div className="flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="Which Holocrons" className="flex gap-1 rounded-lg border border-line p-1">
-          <button role="tab" type="button" aria-selected={tab === "published"} className={tabCls(tab === "published")} onClick={() => setTab("published")}>
+          <button role="tab" type="button" aria-selected={tab === "published"} className={tabCls(tab === "published")} onClick={() => switchTab("published")}>
             Published
           </button>
-          <button role="tab" type="button" aria-selected={tab === "mine"} className={tabCls(tab === "mine")} onClick={() => setTab("mine")}>
+          <button role="tab" type="button" aria-selected={tab === "mine"} className={tabCls(tab === "mine")} onClick={() => switchTab("mine")}>
             My Holocrons
           </button>
         </div>
-        <label className="min-w-0 flex-1 sm:max-w-sm">
+        <label className="min-w-0 flex-1 basis-56 sm:max-w-sm">
           <span className="sr-only">Search Holocrons</span>
           <input
             type="search"
@@ -91,21 +114,61 @@ export default function ArchivesView() {
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted focus-visible:outline-2 focus-visible:outline-info"
           />
         </label>
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <span className="font-mono text-xs uppercase tracking-widest">Sort</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SkillSort)}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus-visible:outline-2 focus-visible:outline-info"
+          >
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
       </div>
 
-      {skills === null && <p className="font-mono text-sm text-muted" role="status">Consulting the Archives…</p>}
+      {domains.length > 0 && (
+        <div role="group" aria-label="Filter by domain" className="flex flex-wrap items-center gap-2">
+          <button type="button" aria-pressed={activeDomain === null} className={chipCls(activeDomain === null)} onClick={() => setDomain(null)}>
+            All
+          </button>
+          {domains.map((d) => (
+            <button
+              key={d.domain}
+              type="button"
+              aria-pressed={activeDomain === d.domain}
+              className={chipCls(activeDomain === d.domain)}
+              onClick={() => setDomain(activeDomain === d.domain ? null : d.domain)}
+            >
+              {d.domain} <span className="opacity-70">{d.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {skills === null && loading && <p className="font-mono text-sm text-muted" role="status">Consulting the Archives…</p>}
       {error && <ErrorBox>{error}</ErrorBox>}
       {skills && !error && shown.length === 0 && (
-        <p className="rounded-xl border border-dashed border-line p-6 text-muted">
-          {query
-            ? "No Holocron matches that search."
-            : tab === "published"
-              ? "The Archives are empty. Teach Yoda something and publish the Holocron."
-              : "Nothing here yet. A finished teaching session shows up as a draft until you publish it."}
-        </p>
+        <div className="rounded-xl border border-dashed border-line p-6 text-muted" data-testid="empty-state">
+          {filtering ? (
+            <>
+              <p>No Holocron matches{query.trim() ? ` "${query.trim()}"` : ""}{activeDomain ? ` in ${activeDomain}` : ""}.</p>
+              <button type="button" className={`${btnGhost} mt-3`} onClick={() => { setQuery(""); setDomain(null); }}>
+                Clear search and filters
+              </button>
+            </>
+          ) : tab === "published" ? (
+            <p>The Archives are empty. Teach Yoda something and publish the Holocron.</p>
+          ) : (
+            <p>Nothing here yet. A finished teaching session shows up as a draft until you publish it.</p>
+          )}
+        </div>
       )}
       {shown.length > 0 && (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Holocrons">
+        <ul
+          className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${loading ? "opacity-60" : ""}`}
+          aria-label="Holocrons"
+          aria-busy={loading}
+        >
           {shown.map((s) => <SkillCard key={s.id} skill={s} />)}
         </ul>
       )}

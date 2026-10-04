@@ -9,14 +9,14 @@ export const MOCK = process.env.NEXT_PUBLIC_API_MOCK === "1";
 
 import { AUTH_MODE, supabase } from "./supabase";
 import { seedSkills } from "./skills-mock";
-import { detailFromSkill, skillToMarkdown, toSummary, type SkillDetail, type SkillSummary } from "./skills";
+import { detailFromSkill, skillToMarkdown, sortSkills, toSummary, type SkillDetail, type SkillSort, type SkillSummary } from "./skills";
 import { newUuid } from "./capture-sync";
 import { findGaps, segmentEvents, synthesizeMockSkill, type MockAnswer, type MockQuestion } from "./mock-pipeline";
 import type {
   AnswerBody, FinishResult, QuestionAskedBody, QuestionCandidate, StepDraft, StepUpdate, TeachbackResult, UtteranceIn,
 } from "./pipeline-types";
 
-export type { SkillDetail, SkillSummary, SkillJson, SkillStep, SkillGuardrail } from "./skills";
+export type { SkillDetail, SkillSummary, SkillJson, SkillStep, SkillGuardrail, SkillSort } from "./skills";
 export type * from "./pipeline-types";
 
 const TOKEN_KEY = "padawan_token";
@@ -565,12 +565,14 @@ export async function setOffTheRecord(sessionId: string, on: boolean): Promise<v
 
 // ---------- skills (Holocrons) ----------
 // Real contract (backend/app/routers/skills.py):
-//   GET  /v1/skills?q=&domain=&mine=   -> SkillSummary[]  (published ones, or with mine=true your own incl. drafts)
+//   GET  /v1/skills?q=&domain=&mine=&sort=newest|popular|mastery -> SkillSummary[]  (published ones, or with mine=true
+//        your own incl. drafts). SkillSummary has learners_count and avg_mastery (null until someone finished a lesson).
+//   POST /v1/skills/{id}/unpublish     -> SkillDetail with status draft (author only)
 //   GET  /v1/skills/{id}               -> SkillDetail = SkillSummary + skill (JSON or null) + skill_md
 //   POST /v1/skills/{id}/publish       -> SkillDetail (author only; 409 without steps)
 //   GET  /v1/skills/{id}/export        -> SKILL.md as text/markdown
 
-const MOCK_SKILLS_KEY = "padawan_mock_skills";
+const MOCK_SKILLS_KEY = "padawan_mock_skills_v2";
 
 function mockSkills(): SkillDetail[] {
   const g = globalThis as unknown as { __padawanMockSkills?: SkillDetail[] };
@@ -601,24 +603,25 @@ function mockFindSkill(id: string): SkillDetail {
   return s;
 }
 
-export type SkillQuery = { q?: string; domain?: string; mine?: boolean };
+export type SkillQuery = { q?: string; domain?: string; mine?: boolean; sort?: SkillSort };
 
-export async function listSkills({ q, domain, mine }: SkillQuery = {}): Promise<SkillSummary[]> {
+export async function listSkills({ q, domain, mine, sort }: SkillQuery = {}): Promise<SkillSummary[]> {
   if (MOCK) {
     await sleep(250);
     mockRequireToken();
     const words = (q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-    return mockSkills()
+    const rows = mockSkills()
       .filter((s) => (mine ? s.author.id === "admin" : s.status === "published"))
       .filter((s) => !domain || s.domain === domain)
       .filter((s) => words.every((w) => `${s.title} ${s.description}`.toLowerCase().includes(w)))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map(toSummary);
+    return sortSkills(rows, sort ?? "newest");
   }
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (domain) params.set("domain", domain);
   if (mine) params.set("mine", "true");
+  if (sort) params.set("sort", sort);
   const qs = params.toString();
   return request(`/v1/skills${qs ? `?${qs}` : ""}`);
 }
@@ -646,6 +649,30 @@ export async function publishSkill(id: string): Promise<SkillDetail> {
     return structuredClone(s);
   }
   return request(`/v1/skills/${encodeURIComponent(id)}/publish`, { method: "POST" });
+}
+
+/** Takes a published Holocron back to draft (author only). Learners keep their old sessions. */
+export async function unpublishSkill(id: string): Promise<SkillDetail> {
+  if (MOCK) {
+    await sleep(300);
+    mockRequireToken();
+    const s = mockFindSkill(id);
+    if (s.author.id !== "admin") throw new ApiError(403, "only the author can unpublish this Holocron");
+    s.status = "draft";
+    s.published_at = null;
+    mockSkillsSave();
+    return structuredClone(s);
+  }
+  return request(`/v1/skills/${encodeURIComponent(id)}/unpublish`, { method: "POST" });
+}
+
+/** Mock only: a lesson started or finished, so the Archives stats move like the real ones would. */
+export function mockRecordLearner(skillId: string, event: { started: true } | { finished: number }): void {
+  const s = mockSkills().find((x) => x.id === skillId);
+  if (!s) return;
+  if ("started" in event) s.learners_count += 1;
+  else s.avg_mastery = s.avg_mastery === null ? event.finished : Math.round((s.avg_mastery + event.finished) / 2);
+  mockSkillsSave();
 }
 
 /** SKILL.md text for a skill (what an agent loads). */
