@@ -1,5 +1,6 @@
 "use client";
 
+import { cleanCaption } from "./captions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Conversation } from "@elevenlabs/client";
 import { MOCK, startVoiceSession, type VoiceMode } from "./api";
@@ -195,7 +196,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
           finish_learning: (a: Record<string, unknown>) => runTool("finish_learning", a),
         },
         onMessage: ({ role, message }) => {
-          if (role === "agent") addCaption("yoda", message);
+          if (role === "agent") addCaption("yoda", cleanCaption(message));
           else if (!isCommand(message)) addCaption("expert", message);
         },
         onModeChange: ({ mode: m }) => setAgentSpeaking(m === "speaking"),
