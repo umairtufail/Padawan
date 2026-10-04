@@ -2,13 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ApiError, login } from "../../lib/api";
+import { ApiError, login, loginWithSupabase } from "../../lib/api";
+import { AUTH_MODE } from "../../lib/supabase";
 import Logo from "../../components/logo";
 import YodaFigure from "../../components/yoda-figure";
 import { btnPrimary, ErrorBox, Label } from "../../components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
+  const useSupabase = AUTH_MODE === "supabase";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -19,10 +21,11 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      await login(username.trim(), password);
+      if (useSupabase) await loginWithSupabase(username.trim(), password);
+      else await login(username.trim(), password);
       router.replace("/dashboard");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setError("Wrong username or password.");
+      if (err instanceof ApiError && err.status === 401) setError(useSupabase ? "Wrong email or password." : "Wrong username or password.");
       else if (err instanceof ApiError && err.status === 0) setError(err.message + ". Is the backend running?");
       else setError(err instanceof Error ? err.message : "Sign in failed.");
       setBusy(false);
@@ -41,8 +44,8 @@ export default function LoginPage() {
       <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border border-line bg-surface/90 p-6" noValidate>
         <h1 className="font-heading text-2xl font-black text-gold">Enter the Archives</h1>
         <label className="block">
-          <Label>Username</Label>
-          <input className={input} name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <Label>{useSupabase ? "Email" : "Username"}</Label>
+          <input className={input} name="username" type={useSupabase ? "email" : "text"} autoComplete={useSupabase ? "email" : "username"} value={username} onChange={(e) => setUsername(e.target.value)} required />
         </label>
         <label className="block">
           <Label>Password</Label>
@@ -52,7 +55,9 @@ export default function LoginPage() {
         <button type="submit" className={`${btnPrimary} w-full`} disabled={busy || !username || !password}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
-        <p className="text-center font-mono text-xs text-muted">Demo access: admin / admin</p>
+        <p className="text-center font-mono text-xs text-muted">
+          {useSupabase ? "Accounts are created by the team." : "Demo access: admin / admin"}
+        </p>
       </form>
     </main>
   );

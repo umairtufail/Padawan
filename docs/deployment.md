@@ -92,6 +92,9 @@ If the first line says `200` instead of `401`, the backend is open (`AUTH_MODE=d
 
 Real keys never go in git (the team `.env` is the one deliberate exception, see `AGENTS.md`). Set them in the dashboards, and rotate the Nebius and ElevenLabs keys after the hackathon.
 
-## Later: Supabase login
+## Supabase login
+Full guide: [`supabase-login.md`](supabase-login.md) (accounts, turning off public sign-ups, variables for both sides, Google later).
+
+In short:
 
 When the UI signs users in with Supabase, set `AUTH_MODE=supabase` and the `SUPABASE_*` variables on the backend and the `NEXT_PUBLIC_SUPABASE_*` ones on Vercel (values in the Notion keys page, enable the login providers and add the Vercel URL as a redirect URL in the Supabase dashboard). Data then lives in Postgres with row-level security.

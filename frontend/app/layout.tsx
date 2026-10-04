@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Montserrat } from "next/font/google";
 import "./globals.css";
+import AuthSync from "../components/auth-sync";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${montserrat.variable} ${jetbrains.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <div className="starfield" aria-hidden="true" />
+        <AuthSync />
         {children}
       </body>
     </html>
