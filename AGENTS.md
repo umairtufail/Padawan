@@ -9,7 +9,7 @@ Padawan watches an expert's shared screen, asks "why" at natural pauses with a v
 - `backend/app/routers/` HTTP endpoints. `backend/app/services/` model calls and logic. `backend/app/prompts/*.system.md` **the prompts: edit them there, not in code.**
 - `backend/app/auth.py` who is calling. `backend/app/repo.py` where data lives (memory in dev, Supabase otherwise).
 - `supabase/migrations/` the exact SQL applied to the database. `frontend/` Next.js app. `docs/` guides.
-- Tickets are GitHub issues (#1 to #16 cover the plan). Pick one, comment that you took it.
+- Tickets are GitHub issues (#22 to #45 cover what is left to build; labels give the area, priority `P0` to `P2`, type, and `blocked` when it waits for another ticket). Pick one, assign yourself or comment that you took it. Start with the `P0 demo-critical` ones.
 
 ## Commands
 ```bash
