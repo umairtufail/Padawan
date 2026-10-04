@@ -90,7 +90,7 @@ If the first line says `200` instead of `401`, the backend is open (`AUTH_MODE=d
 
 ## Secrets
 
-Real keys never go in git (the team `.env` is the one deliberate exception, see `AGENTS.md`). Set them in the dashboards, and rotate the Nebius and ElevenLabs keys after the hackathon.
+Real keys never go in git (the repo is public, see `AGENTS.md`). Set them in the dashboards. **The Nebius and ElevenLabs keys were in git history while the repo was public: rotate both now** (create a new key, update the Notion page and the FastAPI Cloud variables, delete the old key).
 
 ## Supabase login
 Full guide: [`supabase-login.md`](supabase-login.md) (accounts, turning off public sign-ups, variables for both sides, Google later).
