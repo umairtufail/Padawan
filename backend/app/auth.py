@@ -90,11 +90,14 @@ def _signing_key(token: str):
 
 
 async def _verify_supabase_token(token: str) -> AuthUser:
+    # Dashboard copy/paste commonly leaves a trailing slash on SUPABASE_URL.  Supabase's
+    # access-token issuer never has that slash, so normalize before the exact issuer check.
+    issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1"
     try:
         key = await asyncio.to_thread(_signing_key, token)
         claims = jwt.decode(
             token, key, algorithms=["ES256", "RS256"], audience="authenticated",
-            issuer=f"{settings.supabase_url}/auth/v1", options={"require": ["exp", "sub"]},
+            issuer=issuer, options={"require": ["exp", "sub"]},
         )
     except jwt.PyJWKClientConnectionError:
         log.exception("could not fetch the Supabase signing keys")

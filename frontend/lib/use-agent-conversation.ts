@@ -33,6 +33,12 @@ type Options = {
 /** How long Yoda waits for an answer before the mic goes back to muted. */
 export const ANSWER_WAIT_MS = 30_000;
 const MAX_CAPTIONS = 60;
+
+/** Capture is app-driven: Yoda hears the Master only during an answer window. */
+export function micStartsOpen(mode: VoiceMode): boolean {
+  return mode !== "capture";
+}
+
 /** Scripted answers of the mock expert, one per question asked. */
 const MOCK_ANSWERS = [
   "Because the cost center must match the asset class, equipment over five thousand is always capex.",
@@ -217,10 +223,12 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
         return;
       }
       conv.current = c;
-      // The mic stays open in every mode: this is a realtime conversation. In capture Yoda is told (prompt) to stay
-      // silent unless he is asked to speak, so an open mic does not make him chatty. The toggle still mutes it.
-      c.setMicMuted(false);
-      setMicOnState(true);
+      // During capture, application state enforces silence: the mic opens automatically only for a question's
+      // answer window and closeAnswerWindow mutes it after log_answer or the timeout. Debrief and tutor remain
+      // normal open-mic conversations. The manual toggle is still an explicit override in every mode.
+      const open = micStartsOpen(mode);
+      c.setMicMuted(!open);
+      setMicOnState(open);
       setStatus("connected");
     } catch (err) {
       setStatus("error");

@@ -54,6 +54,12 @@ async def test_valid_token_identifies_user_and_keeps_token(repo):
     assert repo.users == [AuthUser("abc-123", t)]
 
 
+async def test_supabase_url_trailing_slash_does_not_change_issuer(repo, monkeypatch):
+    monkeypatch.setattr(settings, "supabase_url", f"{URL}/")
+    r = await create({"Authorization": f"Bearer {token()}"})
+    assert r.status_code == 201
+
+
 async def test_missing_token_401(repo):
     assert (await create()).status_code == 401
 
