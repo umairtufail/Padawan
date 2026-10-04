@@ -139,6 +139,24 @@ export async function loginWithSupabase(email: string, password: string): Promis
   setSession(data.session.access_token, data.session.user.email ?? email);
 }
 
+/**
+ * Creates an account with email and password. Supabase sends a confirmation email; the link opens the site
+ * (see components/auth-sync.tsx) and signs the person in. Returns "signed_in" when confirmation is switched off.
+ */
+export async function signUpWithSupabase(email: string, password: string): Promise<"confirm_email" | "signed_in"> {
+  const { data, error } = await supabase().auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) throw new ApiError(error.status ?? 400, error.message);
+  if (data.session) {
+    setSession(data.session.access_token, data.session.user.email ?? email);
+    return "signed_in";
+  }
+  return "confirm_email";
+}
+
 /** Clears the stored session. Pass redirectTo to also leave the page (hard navigation). */
 export function logout(redirectTo?: string) {
   if (!hasStorage()) return;

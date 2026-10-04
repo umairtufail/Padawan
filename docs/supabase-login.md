@@ -15,9 +15,9 @@ Code: `frontend/lib/supabase.ts`, `frontend/lib/api.ts` (`loginWithSupabase`, `s
 
 ## 1. Supabase dashboard (project `reuueppvukwdiytfxezj`)
 - [ ] **Authentication, Users, Add user** (or Invite): create the team's accounts with an email and a password they choose. Tick "Auto Confirm User" when you set the password yourself.
-- [ ] **Authentication, Sign In / Providers**: turn **off "Allow new users to sign up"**. The publishable key is public by design, so while sign-ups are on, anyone can register through the API and then use our backend.
+- [ ] **Authentication, Sign In / Providers**: keep **"Allow new users to sign up"** on, people create their own account on the login page. Because anyone can then register and use the backend (which spends Nebius credits), keep **"Confirm email" on** (a real inbox is needed) and watch usage. If it gets abused, turn sign-ups off and create accounts by hand.
 - [ ] **Authentication, URL Configuration**: set **Site URL** to `https://padawan-bay.vercel.app` (confirmation and reset emails link there; the default is `http://localhost:3000`) and add `http://localhost:3000` to the redirect URLs. The app handles the confirmation link itself: it reads the session from the URL and sends the person to `/dashboard`.
-- [ ] Optional: **Confirm email** stays on if people sign up themselves; off if you only create accounts by hand.
+- [ ] **Confirm email** stays **on**. The confirmation link opens the site (Site URL above), signs the person in and opens the dashboard.
 
 ## 2. Turn it on
 | Where | Variables |
@@ -36,7 +36,7 @@ curl -s -o /dev/null -w "admin login:     %{http_code} (want 404, disabled in su
 Then sign in on the site with a real account, press Start teaching, and look at the Supabase tables `sessions` and `events`: rows appear under your user id. A user never sees another user's rows.
 
 ## Tested
-Email and password sign-in through the real login form, a wrong password rejected, a recording saved to `sessions` and `events` under the right user, the data read back after a fresh login, another user and anonymous access blocked by the database rules, sign-out clearing the session and the dashboard guard. Not tested: token renewal after an hour, sign-up through the UI (there is none: accounts are created in the dashboard).
+Email and password sign-in through the real login form, a wrong password rejected, a recording saved to `sessions` and `events` under the right user, the data read back after a fresh login, another user and anonymous access blocked by the database rules, sign-out clearing the session and the dashboard guard. Not tested: token renewal after an hour. Sign-up lives on the login page (Create an account, confirmation email); the form compiles and passes lint, and was not clicked through yet.
 
 ## Google login (optional, later)
 Needs a Google Cloud project, about 10 to 15 minutes:
