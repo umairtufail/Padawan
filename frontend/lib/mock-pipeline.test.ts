@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findGaps, segmentEvents, synthesizeMockSkill, type MockEvent, type MockQuestion } from "./mock-pipeline";
+import { findGaps, segmentEvents, skillTitle, synthesizeMockSkill, type MockEvent, type MockQuestion } from "./mock-pipeline";
 
 const ev = (id: number, salient: boolean, t_ms = id * 1000): MockEvent => ({ id, summary: `Event ${id} happened.`, salient, t_ms });
 const events = [ev(1, false), ev(2, true), ev(3, false), ev(4, true), ev(5, false)];
@@ -69,5 +69,25 @@ describe("synthesizeMockSkill", () => {
     const ids = [...skill.steps.flatMap((s) => s.guardrails), ...skill.global_guardrails].map((g) => g.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(skill.teachback).toEqual({ confirmed: true, corrections: ["Hold in December"] });
+  });
+});
+
+describe("skillTitle", () => {
+  const steps = [{ title: "Code the invoice to a cost center." }, { title: "Open the next invoice" }];
+  it("replaces a placeholder session title with a name from the first steps", () => {
+    for (const t of ["New task", "  untitled ", "Untitled 2", ""]) expect(skillTitle(t, steps)).toBe("Code the invoice to a cost center");
+    expect(skillTitle("New task", [{ title: "Open it" }, { title: "Save" }])).toBe("Open it / Save");
+    expect(skillTitle("New task", [])).toBe("Recorded task");
+  });
+  it("keeps a real title", () => {
+    expect(skillTitle("Process supplier invoices", steps)).toBe("Process supplier invoices");
+  });
+  it("the mock synthesis never produces the placeholder and adds a summary", () => {
+    const st = segmentEvents(events, [], true);
+    const skill = synthesizeMockSkill({
+      id: "x", title: "New task", author: { id: "a", name: "A" }, steps: st, events, questions: [], answers: [], corrections: [], now: "2026-01-01",
+    });
+    expect(skill.title).not.toBe("New task");
+    expect(skill.summary).toContain(`${st.length} steps`);
   });
 });

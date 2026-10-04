@@ -98,8 +98,10 @@ async def test_set_session_state_patches_only_given_fields():
     repo, seen = repo_with(lambda r: httpx.Response(204))
     await repo.set_session_state(USER, SID, status="done", skill_id=SKID)
     assert json.loads(seen[0].content) == {"status": "done", "skill_id": SKID}
+    await repo.set_session_state(USER, SID, title="Re-code supplier invoices")
+    assert json.loads(seen[1].content) == {"title": "Re-code supplier invoices"}
     await repo.set_session_state(USER, SID)
-    assert len(seen) == 1
+    assert len(seen) == 2
 
 
 async def test_save_skill_upserts_as_author_never_from_a_client_author_id():

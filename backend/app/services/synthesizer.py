@@ -20,6 +20,42 @@ from .segmenter import is_decision
 
 MIN_QUOTE_CHARS = 4
 
+# Titles that name nothing. The session title is usually one of these (the app creates it before anything is shown).
+PLACEHOLDER_TITLES = {
+    "", "new task", "untitled", "untitled task", "untitled session", "new session", "new skill", "task", "skill",
+    "session", "screen recording", "new holocron", "holocron", "teaching session", "my task", "test",
+}
+MAX_TITLE_WORDS = 10  # the prompt asks for 3 to 8; beyond 10 it is a sentence, not a name
+
+
+def is_placeholder_title(title: str | None) -> bool:
+    t = re.sub(r"[^\w ]+", " ", (title or "").casefold())
+    t = " ".join(t.split())
+    return t in PLACEHOLDER_TITLES or bool(re.fullmatch(r"(new task|untitled)( \d+)?", t))
+
+
+def clean_title(title: str | None) -> str:
+    """One line, no quotes or trailing period. Empty when the title is a placeholder or a whole sentence."""
+    t = " ".join(str(title or "").split()).strip(" \"'`.")
+    if is_placeholder_title(t) or len(t.split()) > MAX_TITLE_WORDS:
+        return ""
+    return t
+
+
+def fallback_title(steps: list[dict], session_title: str = "") -> str:
+    """A name derived from the first steps when the model gave none (never 'New task')."""
+    names = []
+    for st in steps[:2]:
+        n = " ".join(str(st.get("title") or "").split()).strip(" .")
+        if n and not is_placeholder_title(n):
+            names.append(n)
+    if names:
+        words = names[0].split()
+        if len(words) < 3 and len(names) > 1:  # too short to be a name: add the second step
+            words += ["/"] + names[1].split()
+        return " ".join(words[:8]).rstrip(" ,.")
+    return clean_title(session_title) or "Recorded task"
+
 
 class SynthesisError(Exception):
     def __init__(self, problems: list[str]):
@@ -167,8 +203,12 @@ def build_skill(
     if problems:
         return None, problems
     out_steps.sort(key=lambda s: s.idx)
+    steps_for_title = [{"title": s.title} for s in out_steps] or steps
+    title = clean_title(data.get("title")) or clean_title(session_title) or fallback_title(steps_for_title)
+    description = str(data.get("description") or "").strip()
     skill = SkillJson(
-        id=skill_id, title=str(data.get("title") or session_title).strip(), description=str(data.get("description") or "").strip(),
+        id=skill_id, title=title, description=description,
+        summary=str(data.get("summary") or "").strip() or description,
         author=author, created_at=now or datetime.now(timezone.utc), language=language, steps=out_steps,
         global_guardrails=glob, teachback=Teachback(confirmed=True, corrections=corrections),
     )
@@ -250,6 +290,8 @@ def render_skill_md(skill: SkillJson) -> str:
     ]
     if skill.description:
         out += [skill.description, ""]
+    if skill.summary and skill.summary != skill.description:
+        out += [skill.summary, ""]
     out += ["# Steps", ""]
     for s in skill.steps:
         out.append(f"## {s.idx}. {s.title}")

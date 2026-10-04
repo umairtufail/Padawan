@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError, finishSession, postAnswer, postQuestionAsked, postTeachback, type FinishResult, type Gap,
+  ApiError, finishSession, postAnswer, postQuestionAsked, postTeachback, type FinishResult, type Gap, type TeachbackResult,
 } from "../lib/api";
 import { askedBody, newUuid, pickAnswerQuote, expertLinesSince } from "../lib/capture-sync";
 import {
@@ -47,6 +47,7 @@ export default function DebriefView({ id }: { id: string }) {
   const [corrections, setCorrections] = useState("");
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState("");
+  const [saved, setSaved] = useState<TeachbackResult | null>(null);
   const [yodaNote, setYodaNote] = useState("");
 
   const [openedAt] = useState(() => Date.now());
@@ -215,7 +216,9 @@ export default function DebriefView({ id }: { id: string }) {
         await sync.flush();
         const result = await postTeachback(id, true, fixes);
         clearDebrief(id);
-        router.push(`/dashboard/skills/${encodeURIComponent(result.skill_id)}`);
+        // Show the name Yoda gave the Holocron for a moment, then open it.
+        setSaved(result);
+        window.setTimeout(() => router.push(`/dashboard/skills/${encodeURIComponent(result.skill_id)}`), 3500);
       } catch (err) {
         submitting.current = false;
         setWriting(false);
@@ -402,7 +405,16 @@ export default function DebriefView({ id }: { id: string }) {
             </button>
           </>
         )}
-        {writing && <p className="font-mono text-xs text-gold" role="status">Yoda is writing the Holocron… this can take up to 30 seconds.</p>}
+        {writing && !saved && <p className="font-mono text-xs text-gold" role="status">Yoda is writing the Holocron… this can take up to 30 seconds.</p>}
+        {saved && (
+          <div className="space-y-2 rounded-xl border border-jade/50 bg-jade/10 p-4" role="status" data-testid="holocron-saved">
+            <Label className="!text-jade">Holocron saved as a draft</Label>
+            <h3 className="font-heading text-xl font-black text-gold">{saved.title}</h3>
+            {saved.description && <p className="text-sm text-fg">{saved.description}</p>}
+            {saved.summary && saved.summary !== saved.description && <p className="text-sm text-muted">{saved.summary}</p>}
+            <Link href={`/dashboard/skills/${encodeURIComponent(saved.skill_id)}`} className={btnPrimary}>Open the Holocron</Link>
+          </div>
+        )}
         {writeError && (
           <div className="space-y-2">
             <ErrorBox>{writeError}</ErrorBox>

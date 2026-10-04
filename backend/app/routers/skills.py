@@ -20,7 +20,7 @@ router = APIRouter()
 def _summary(r: SkillRecord, stats: dict[str, tuple[int, float | None]] | None = None) -> dict:
     learners, avg = (stats or {}).get(r.id, (0, None))
     return dict(learners_count=learners, avg_mastery=avg,
-        id=r.id, title=r.title, description=r.description, domain=r.domain, language=r.language, status=r.status,
+        id=r.id, title=r.title, description=r.description, summary=str((r.skill_json or {}).get("summary") or ""), domain=r.domain, language=r.language, status=r.status,
         author=SkillAuthor(id=r.author_id, name=r.author_name), steps_count=r.steps_count,
         guardrails_count=r.guardrails_count, created_at=r.created_at, published_at=r.published_at,
     )

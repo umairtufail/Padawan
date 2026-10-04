@@ -152,7 +152,11 @@ export default function Overview() {
                     <p className="mt-1 line-clamp-2 text-sm text-muted">
                       {s.last_screen_summary || "No screen captured yet."}
                     </p>
-                    <div className="mt-3"><Chip tone="info">{s.events_count} events</Chip></div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Chip tone="info">{s.events_count} events</Chip>
+                      {s.skill_id && s.status === "done" && <Chip tone="jade">Holocron saved</Chip>}
+                      {s.status === "failed" && <Chip tone="danger">Writing failed</Chip>}
+                    </div>
                   </Link>
                 </li>
               ))}

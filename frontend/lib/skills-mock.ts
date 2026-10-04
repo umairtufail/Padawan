@@ -22,6 +22,8 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
   const invoices = detail(
     {
       id: "skill-invoices",
+      summary:
+        "Sabine takes the oldest unposted invoice first, checks the supplier against the master data and codes the cost center. Equipment above 5,000 EUR is capex, so she re-codes it and will not post without an asset number. Anything after the close deadline needs her boss.",
       title: "Process supplier invoices before month-end",
       description:
         "How Sabine codes and posts supplier invoices in SandboxERP before the month-end close. Covers cost center choice (opex versus capex), asset numbers and what to do with unknown suppliers.",
@@ -92,6 +94,8 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
   const vendor = detail(
     {
       id: "skill-vendor",
+      summary:
+        "Marc verifies the tax ID in the official registry before anything else, because fake vendors rarely resolve. He then sets the payment terms to 30 days net and sends the compliance questionnaire. A missing tax ID means he stops and asks compliance.",
       title: "Onboard a new vendor",
       description:
         "Marc's checklist for creating a vendor in the procurement system: tax ID check, payment terms and the compliance questionnaire.",
@@ -140,6 +144,7 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
   const draft = detail(
     {
       id: "skill-draft-expenses",
+      summary: "The Master opened an expense report, compared the receipts with the claimed amounts and approved it from the payroll queue. A draft: review the steps, then publish.",
       title: "Approve travel expense reports",
       description: "Draft from a session an hour ago. Review the steps, then publish it to the Jedi Archives.",
       author: { id: "admin", name: "Admin" },
@@ -185,6 +190,8 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
   const bank = detail(
     {
       id: "skill-bank",
+      summary:
+        "Priya imports the weekly bank statement, lets the auto-match run and only accepts proposals above 90 percent confidence. Unmatched payments go to the clearing account, and anything above 10,000 EUR goes to the controller first.",
       title: "Reconcile the bank statement",
       description: "Priya's weekly routine for matching bank lines to open items, and what to do with unmatched payments.",
       author: { id: "u-priya", name: "Priya" },
@@ -204,6 +211,8 @@ export function seedSkills(now = Date.now()): SkillDetail[] {
   const shipping = detail(
     {
       id: "skill-shipping",
+      summary:
+        "Tomas filters the dock board for held shipments, opens the customs tab and checks the HS code before releasing anything. If the HS code is missing he stops and asks the customs desk.",
       title: "Release a held shipment",
       description: "Tomas explains how to check the customs hold, confirm the paperwork and release a shipment from the warehouse system.",
       author: { id: "u-tomas", name: "Tomas" },

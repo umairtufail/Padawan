@@ -20,7 +20,8 @@ function SkillCard({ skill }: { skill: SkillSummary }) {
           {skill.domain && <Chip tone="info">{skill.domain}</Chip>}
         </div>
         <h3 className="mt-3 font-heading text-lg font-bold text-fg">{skill.title}</h3>
-        <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted">{skill.description}</p>
+        <p className="mt-1 line-clamp-2 text-sm text-fg">{skill.description}</p>
+        <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted" data-testid="skill-summary">{skill.summary}</p>
         <div className="mt-4"><SkillStats skill={skill} /></div>
         <p className="mt-3 font-mono text-xs text-muted">
           Taught by {skill.author.name} · {formatDate(skill.published_at ?? skill.created_at)}

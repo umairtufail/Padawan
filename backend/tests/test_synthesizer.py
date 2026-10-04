@@ -180,3 +180,56 @@ async def test_teachback_endpoint_failures():
         assert (await c.post(f"/v1/sessions/{sid}/teachback", json={"confirmed": False})).status_code == 400
         assert (await c.post(f"/v1/sessions/{empty}/teachback", json={})).status_code == 409
         assert (await c.post("/v1/sessions/nope/teachback", json={})).status_code == 404
+
+
+# ---- AI name, description and summary
+
+
+@pytest.mark.parametrize("title", ["New task", "  untitled ", "Untitled 2", "", None, "x " * 12])
+async def test_generic_model_title_falls_back_to_a_name_from_the_steps(title):
+    ctx = await context()
+    ctx["session_title"] = "New task"
+    skill, *_ = await synthesizer.synthesize(chat=sequence(skill_output(title=title)), **ctx)
+    assert skill.title == "Code the invoice to a cost center"  # first step, never the placeholder
+
+
+async def test_real_session_title_is_kept_when_the_model_gives_none():
+    skill, *_ = await synthesizer.synthesize(chat=sequence(skill_output(title="New task")), **await context())
+    assert skill.title == "Process invoices"
+
+
+async def test_summary_is_kept_and_defaults_to_the_description():
+    out = skill_output(title="Re-code supplier invoices to the right cost center.", summary="The Master re-coded invoice 4471 to capex.")
+    skill, *_ = await synthesizer.synthesize(chat=sequence(out), **await context())
+    assert skill.title == "Re-code supplier invoices to the right cost center"  # trailing period dropped
+    assert skill.summary == "The Master re-coded invoice 4471 to capex."
+    assert "The Master re-coded invoice 4471 to capex." in synthesizer.render_skill_md(skill)
+    skill, *_ = await synthesizer.synthesize(chat=sequence(skill_output()), **await context())
+    assert skill.summary == skill.description
+
+
+def test_placeholder_titles():
+    for t in ("New task", "new task!", "Untitled", "Untitled 3", "", "  "):
+        assert synthesizer.is_placeholder_title(t)
+    assert not synthesizer.is_placeholder_title("New task force invoices")
+    assert not synthesizer.is_placeholder_title("Process invoices")
+
+
+async def test_teachback_names_the_session_when_it_was_a_placeholder():
+    async def synth(**kw):
+        return await synthesizer.synthesize(chat=sequence(skill_output(summary="Why and how.")), **kw)
+
+    app.dependency_overrides[get_synthesizer] = lambda: synth
+    placeholder = await seed_session(title="New task")
+    named = await seed_session(title="My own name")
+    async with client() as c:
+        r = await c.post(f"/v1/sessions/{placeholder}/teachback", json={})
+        await c.post(f"/v1/sessions/{named}/teachback", json={})
+        listing = (await c.get("/v1/skills?mine=true")).json()
+        sessions = {x["session_id"]: x for x in (await c.get("/v1/sessions")).json()}
+    assert r.json()["title"] == "Process supplier invoices" and r.json()["summary"] == "Why and how."
+    assert sessions[placeholder]["title"] == "Process supplier invoices" and sessions[placeholder]["status"] == "done"
+    assert sessions[placeholder]["skill_id"] == r.json()["skill_id"]
+    assert (await store.get_session(DEV, placeholder)).title == "Process supplier invoices"
+    assert (await store.get_session(DEV, named)).title == "My own name"
+    assert r.status_code == 200 and {s["summary"] for s in listing} == {"Why and how."}

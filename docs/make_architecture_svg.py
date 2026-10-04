@@ -70,7 +70,7 @@ be = [
  (4, "Vision service + prompts", "frame + previous summary gives events", True),
  (5, "Question planner", "what Yoda asks, anchored to real events", True),
  (6, "Step segmenter + gap finder", "steps for the debrief", True),
- (7, "Skill synthesizer", "Holocron JSON + SKILL.md, quotes checked", True),
+ (7, "Skill synthesizer", "AI-named Holocron JSON + SKILL.md, quotes checked", True),
  (8, "Skills API", "list, publish, export", True),
  (9, "Guardrail checker", "learn mode: stop the wrong move before Save", True),
  (10, "PII redaction + off the record", "regex and checksums, nothing analysed off the record", True),

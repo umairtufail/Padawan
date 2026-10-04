@@ -64,7 +64,7 @@
 <text x="659" y="687" font-size="12" fill="#047857">steps for the debrief</text>
 <rect x="645" y="719" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="659" y="741" font-size="15" font-weight="700" fill="#064e3b">Skill synthesizer</text>
-<text x="659" y="759" font-size="12" fill="#047857">Holocron JSON + SKILL.md, quotes checked</text>
+<text x="659" y="759" font-size="12" fill="#047857">AI-named Holocron JSON + SKILL.md, quotes checked</text>
 <rect x="645" y="791" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="659" y="813" font-size="15" font-weight="700" fill="#064e3b">Skills API</text>
 <text x="659" y="831" font-size="12" fill="#047857">list, publish, export</text>

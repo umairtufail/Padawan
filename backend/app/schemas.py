@@ -87,6 +87,8 @@ class SessionSummary(BaseModel):
     created_at: datetime
     last_screen_summary: str = ""
     events_count: int = 0
+    status: str = "live"  # live | debrief | processing | done | failed
+    skill_id: str | None = None  # the Holocron written from this session, once there is one
 
 
 class StoredEvent(Event):
@@ -253,6 +255,7 @@ class SkillJson(BaseModel):
     id: str
     title: str
     description: str = ""
+    summary: str = ""  # one paragraph: what the Master showed and why (additive, older skills have none)
     author: SkillAuthor
     created_at: datetime
     language: str = "en"
@@ -265,6 +268,7 @@ class SkillSummary(BaseModel):
     id: str
     title: str
     description: str = ""
+    summary: str = ""  # from skill_json, "" for skills made before summaries existed
     domain: str | None = None
     language: str = "en"
     status: Literal["draft", "published"]
@@ -293,3 +297,7 @@ class SynthesizeOut(BaseModel):
     steps_count: int
     guardrails_count: int
     attempts: int  # 1, or 2 when the quote check forced a retry
+    # What the model wrote, so the debrief can show it before opening the draft (additive).
+    title: str = ""
+    description: str = ""
+    summary: str = ""

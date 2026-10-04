@@ -152,6 +152,9 @@ export default function HolocronView({ id }: { id: string }) {
           <div className="mt-2"><SkillStats skill={skill} /></div>
           <h1 className="mt-2 font-heading text-2xl font-black text-gold sm:text-3xl">{skill.title}</h1>
           <p className="mt-1 text-muted">{skill.description}</p>
+          {skill.summary && skill.summary !== skill.description && (
+            <p className="mt-3 text-sm text-fg" data-testid="holocron-summary">{skill.summary}</p>
+          )}
           <p className="mt-2 font-mono text-xs text-muted">
             Taught by {skill.author.name} · {formatDate(skill.published_at ?? skill.created_at)}
           </p>

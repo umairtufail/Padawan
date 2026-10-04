@@ -127,7 +127,7 @@ class SessionRepo(Protocol):
 
     async def set_session_state(
         self, user: AuthUser, session_id: str, *, status: str | None = None, skill_id: str | None = None,
-        mastery_score: int | None = None,
+        mastery_score: int | None = None, title: str | None = None,
     ) -> None: ...
 
     async def list_learn_sessions(self, user: AuthUser) -> list[SessionRecord]:
@@ -252,10 +252,12 @@ class MemoryRepo:
         for s in steps:
             bucket[s["idx"]] = dict(s)
 
-    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None) -> None:
+    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None, title=None) -> None:
         if not self._owns(user, session_id):
             raise RepoError("session not found")
         rec = self._sessions[session_id]
+        if title is not None:
+            rec.title = title
         if mastery_score is not None:
             rec.mastery_score = mastery_score
         if status is not None:
@@ -392,7 +394,7 @@ class SupabaseRepo:
         return r.json() if returning and r.content else []
 
     async def create_session(self, user, title, description, language, *, kind="teach", skill_id=None) -> SessionRecord:
-        body = {"user_id": user.id, "kind": kind, "title": title}
+        body = {"user_id": user.id, "kind": kind, "title": title, "language": language}
         if skill_id:
             body["skill_id"] = skill_id
         rows = await self._send(
@@ -413,7 +415,7 @@ class SupabaseRepo:
         except ValueError:
             return None
         rows = await self._send(
-            "GET", f"/sessions?id=eq.{session_id}&select=id,user_id,title,last_screen_summary,started_at,skill_id,status,kind&limit=1",
+            "GET", f"/sessions?id=eq.{session_id}&select=id,user_id,title,last_screen_summary,started_at,skill_id,status,kind,language&limit=1",
             user, returning=True,
         )
         if not rows:  # not found, or row-level security hides it because it is not the user's
@@ -423,6 +425,7 @@ class SupabaseRepo:
             id=r["id"], user_id=r["user_id"], title=r["title"] or "",
             created_at=datetime.fromisoformat(r["started_at"]), last_summary=r["last_screen_summary"] or "",
             skill_id=r.get("skill_id"), status=r.get("status") or "live", kind=r.get("kind") or "teach",
+            language=r.get("language") or "en",
         )
 
     async def save_frame_result(self, user, session_id, t_ms, summary, events) -> list[int]:
@@ -449,7 +452,7 @@ class SupabaseRepo:
     async def list_sessions(self, user) -> list[SessionRecord]:
         rows = await self._send(
             "GET",
-            "/sessions?kind=eq.teach&select=id,user_id,title,last_screen_summary,started_at,events(count)&order=started_at.desc&limit=100",
+            "/sessions?kind=eq.teach&select=id,user_id,title,last_screen_summary,started_at,status,skill_id,events(count)&order=started_at.desc&limit=100",
             user, returning=True,
         )
         out = []
@@ -460,6 +463,7 @@ class SupabaseRepo:
                     id=r["id"], user_id=r["user_id"], title=r["title"] or "",
                     created_at=datetime.fromisoformat(r["started_at"]),
                     last_summary=r["last_screen_summary"] or "", events_count=int(counts[0].get("count", 0)),
+                    status=r.get("status") or "live", skill_id=r.get("skill_id"),
                 )
             )
         return out
@@ -585,9 +589,10 @@ class SupabaseRepo:
             calls.append(self._send("POST", "/steps_draft", user, json=new))
         await asyncio.gather(*calls)
 
-    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None) -> None:
+    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None, title=None) -> None:
         patch = {
-            k: v for k, v in (("status", status), ("skill_id", skill_id), ("mastery_score", mastery_score)) if v is not None
+            k: v for k, v in (("status", status), ("skill_id", skill_id), ("mastery_score", mastery_score), ("title", title))
+            if v is not None
         }
         if patch and self._check_uuid(session_id):
             await self._send("PATCH", f"/sessions?id=eq.{session_id}", user, json=patch)
