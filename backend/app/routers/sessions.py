@@ -2,13 +2,16 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
 from ..auth import AuthUser, current_user
 from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
-from ..schemas import Event, FrameResponse, OffTheRecord, SessionCreate, SessionDetail, SessionOut, SessionSummary, StoredEvent
-from ..services import vision
+from ..schemas import (
+    Event, FrameResponse, OffTheRecord, QuestionCandidate, SessionCreate, SessionDetail, SessionOut, SessionSummary,
+    StepUpdate, StoredEvent,
+)
+from ..services import gaps, question_planner, segmenter, vision
 from ..services.pii import redact_frame_result
 
 log = logging.getLogger("padawan.sessions")
@@ -29,6 +32,28 @@ _off_record: set[str] = set()
 def get_vision() -> VisionFn:
     """Dependency so tests can swap the real model call for a fake."""
     return vision.extract_events
+
+
+PlannerFn = Callable[..., Awaitable[list[QuestionCandidate]]]
+
+
+def get_planner() -> PlannerFn:
+    """Dependency so tests can swap the real question planner for a fake."""
+    return question_planner.plan_questions
+
+
+async def _candidates_for(user: AuthUser, repo: SessionRepo, session_id: str, plan: PlannerFn) -> list[QuestionCandidate]:
+    """Question candidates after a salient frame. Any failure means no candidates, never an error."""
+    try:
+        events = await repo.list_recent_events(user, session_id, 12)
+        transcript = await repo.list_utterances(user, session_id, limit=10, recent=True)
+        asked = await repo.list_questions(user, session_id)
+        found = await plan(events, transcript, asked)
+    except Exception:
+        log.exception("question planning failed")
+        return []
+    gaps.record_candidates(session_id, [c.model_dump() for c in found])
+    return found
 
 
 @router.post("/teach/sessions", response_model=SessionOut, status_code=201)
@@ -103,11 +128,13 @@ async def set_off_the_record(
 @router.post("/sessions/{session_id}/frames", response_model=FrameResponse)
 async def post_frame(
     session_id: str,
+    background: BackgroundTasks,
     t_ms: int = Form(...),
     frame: UploadFile = File(...),
     user: AuthUser = Depends(current_user),
     repo: SessionRepo = Depends(get_repo),
     extract: VisionFn = Depends(get_vision),
+    plan: PlannerFn = Depends(get_planner),
 ) -> FrameResponse:
     if session_id in _off_record:
         # Checked first: the frame is not read, analysed or stored, and goes nowhere.
@@ -176,6 +203,17 @@ async def post_frame(
         for e, event_id in zip(events, ids):
             e.id = event_id
 
+        # The model is only asked for questions when something salient happened on this frame.
+        candidates = await _candidates_for(user, repo, session_id, plan) if any(e.salient for e in events) else []
+
+        # Steps are grouped in the background every few events (single flight per session).
+        segmenter.note_events(session_id, len(events))
+        if segmenter.due(session_id):
+            background.add_task(segmenter.run_segmenter, user, repo, session_id)
+        cur = segmenter.current_step(session_id)
+
         return FrameResponse(
-            t_ms=t_ms, screen_summary=summary, events=events, latency_ms=result.latency_ms
+            t_ms=t_ms, screen_summary=summary, events=events, latency_ms=result.latency_ms,
+            question_candidates=candidates,
+            step_update=StepUpdate(idx=cur["idx"], title=cur["title"], status=cur["status"]) if cur else None,
         )
