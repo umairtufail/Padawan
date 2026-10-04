@@ -35,9 +35,9 @@
 <rect x="65" y="863" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
 <text x="79" y="885" font-size="15" font-weight="700" fill="#475569">Learn session</text>
 <text x="79" y="903" font-size="12" fill="#64748b">replay the Master's moment, stop before Save</text>
-<rect x="65" y="935" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="79" y="957" font-size="15" font-weight="700" fill="#475569">Supabase login UI</text>
-<text x="79" y="975" font-size="12" fill="#64748b">replaces the admin login (talks to Supabase Auth)</text>
+<rect x="65" y="935" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="79" y="957" font-size="15" font-weight="700" fill="#064e3b">Supabase login UI</text>
+<text x="79" y="975" font-size="12" fill="#047857">email and password, Supabase mode (admin login stays the default)</text>
 <rect x="65" y="1007" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
 <text x="79" y="1029" font-size="15" font-weight="700" fill="#475569">Yoda voice UI</text>
 <text x="79" y="1047" font-size="12" fill="#64748b">mic, captions, pause controller</text>
@@ -77,9 +77,9 @@
 <rect x="645" y="1007" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
 <text x="659" y="1029" font-size="15" font-weight="700" fill="#475569">Voice sessions</text>
 <text x="659" y="1047" font-size="12" fill="#64748b">signed URLs for the Yoda agents</text>
-<rect x="1225" y="215" width="410" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="1239" y="237" font-size="15" font-weight="700" fill="#475569">Supabase Auth</text>
-<text x="1239" y="255" font-size="12" fill="#64748b">login providers not enabled yet</text>
+<rect x="1225" y="215" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+<text x="1239" y="237" font-size="15" font-weight="700" fill="#064e3b">Supabase Auth</text>
+<text x="1239" y="255" font-size="12" fill="#047857">email and password works; Google not set up</text>
 <rect x="1225" y="359" width="410" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
 <text x="1239" y="381" font-size="15" font-weight="700" fill="#064e3b">Supabase Postgres + RLS</text>
 <text x="1239" y="399" font-size="12" fill="#047857">8 tables, sign-up trigger, owner policies</text>

@@ -59,7 +59,7 @@ fe = [
  (7, "Holocron / Work Map view", "steps, reasons and guardrails of a session", False),
  (8, "Jedi Archives marketplace", "browse Holocrons, start a session", False),
  (9, "Learn session", "replay the Master's moment, stop before Save", False),
- (10, "Supabase login UI", "replaces the admin login (talks to Supabase Auth)", False),
+ (10, "Supabase login UI", "email and password, Supabase mode (admin login stays the default)", True),
  (11, "Yoda voice UI", "mic, captions, pause controller", False),
 ]
 be = [
@@ -77,7 +77,7 @@ be = [
  (11, "Voice sessions", "signed URLs for the Yoda agents", False),
 ]
 ext = [
- (0, "Supabase Auth", "login providers not enabled yet", False),
+ (0, "Supabase Auth", "email and password works; Google not set up", True),
  (2, "Supabase Postgres + RLS", "8 tables, sign-up trigger, owner policies", True),
  (4, "Nebius: DeepSeek V4.1 Flash", "vision model, 1 to 2 s per frame", True),
  (6, "Supabase Storage + Realtime", "keyframes bucket, live steps (enabled, unused)", False),
