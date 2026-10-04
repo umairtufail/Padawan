@@ -14,7 +14,7 @@ Built for the Hack-Nation 7th Global AI Hackathon, challenge 01 "The AI Apprenti
 | Tickets | [GitHub issues](https://github.com/umairtufail/Padawan/issues) |
 | Full design | Notion: **Padawan - Hack-nation 07** (pages 00 to 11) |
 
-> The deployed backend only serves new endpoints after the latest `main` is redeployed. Check `/openapi.json` to see what is live.
+> Vercel builds are rate limited on the free plan at times, so the live frontend can lag behind `main`. Check the deployment status on the commit.
 
 ## How it works
 
@@ -27,7 +27,11 @@ Browser (Next.js on Vercel)                       FastAPI on FastAPI Cloud      
 1. **Capture:** the expert shares a screen. The browser sends only frames that changed.
 2. **Understand:** the backend asks a vision model what *changed* compared with the previous frame and returns structured events.
 3. **Ask:** a pause controller decides when Yoda speaks (screen idle, expert silent, question budget left).
-4. **Map and teach:** the session becomes a Holocron, which Yoda later uses to tutor a new hire.
+4. **Debrief:** when the expert finishes, Yoda asks the open gap questions by voice and explains the process back (teach-back).
+5. **Holocron:** the confirmed session becomes a skill (steps, reasons, guardrails, quotes), reviewed and published to the Jedi Archives.
+6. **Learn:** a new hire picks a Holocron and shares their screen; Yoda tutors by voice, asks for predictions, stops the wrong move before Save, and ends with a mastery report.
+
+Yoda always speaks his questions aloud (realtime ElevenLabs voice); the text on screen is only captions.
 
 ## Architecture: what is built and what is not
 
@@ -38,10 +42,10 @@ Green is built and merged to `main`, gray dashed is still to build. Status table
 ## Repository layout
 
 ```
-frontend/    Next.js 16 (App Router, TypeScript): dashboard, Meet-style session UI
+frontend/    Next.js 16 (App Router, TypeScript): dashboard, capture and Yoda voice UI, debrief, Holocrons, Archives, learn session
 backend/     FastAPI, managed with uv
   app/routers/    HTTP endpoints
-  app/services/   vision model call (more to come: question planner, segmenter, synthesizer)
+  app/services/   vision, question planner, segmenter, gap finder, skill synthesizer, guardrail checker, PII redaction, keyframes, ElevenLabs
   app/prompts/    the prompts, as editable .md files
   app/auth.py     Supabase token check        app/repo.py   storage (memory or Supabase)
   scripts/        manual model tests (test_vision, eval_vision)
@@ -77,15 +81,18 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 
 The frontend developer's guide (formats, a TypeScript client, curl examples) is [`docs/frontend-integration.md`](docs/frontend-integration.md).
 
-## API (v0)
+## API
 
-| Endpoint | What it does |
+Every endpoint except `/health` needs a Bearer token. Full shapes, TypeScript types and examples: [`docs/frontend-integration.md`](docs/frontend-integration.md); live OpenAPI at `/docs`.
+
+| Area | Endpoints |
 |---|---|
-| `GET /health` | liveness |
-| `POST /v1/auth/login` | demo login (`dev` and `admin` modes), returns a Bearer token |
-| `POST /v1/teach/sessions` | create a teach session |
-| `GET /v1/sessions`, `GET /v1/sessions/{id}` | list my sessions, read one with its events |
-| `POST /v1/sessions/{id}/frames` | multipart `t_ms` + `frame` (JPEG) in, structured events out |
+| Health, login | `GET /health`, `POST /v1/auth/login` (demo, `dev` and `admin` modes) |
+| Teach sessions | `POST /v1/teach/sessions`, `GET /v1/sessions`, `GET /v1/sessions/{id}`, `POST /v1/sessions/{id}/frames` (JPEG in, events, question candidates and step update out), `POST /v1/sessions/{id}/off-the-record`, `GET /v1/sessions/{id}/keyframes/{t_ms}` |
+| Debrief | `POST /v1/sessions/{id}/utterances`, `.../questions/{qid}/asked`, `.../answers`, `GET .../steps`, `POST .../finish` (steps and gaps), `POST .../teachback` (draft Holocron) |
+| Holocrons | `GET /v1/skills`, `GET /v1/skills/{id}`, `POST /v1/skills/{id}/publish`, `GET /v1/skills/{id}/export` (SKILL.md) |
+| Learn | `POST /v1/learn/sessions`, `.../frames` (adds a `verdict`: ok, warn, stop), `.../predictions`, `.../report`, `.../finish` |
+| Voice | `POST /v1/voice/sessions` (signed URL and variables for the Yoda interviewer or tutor) |
 
 Frames go **straight from the browser to the backend**, never through a Next.js API route (Vercel body limit 4.5 MB).
 
@@ -111,20 +118,26 @@ Full guide with the exact variables for FastAPI Cloud and Vercel, a verification
 
 - **Backend** (FastAPI Cloud): set the variables above, then `cd backend && uv run fastapi deploy`. Remember `ALLOWED_ORIGINS`, otherwise the browser is blocked by CORS.
 - **Frontend** (Vercel): connected to the repo; set the `NEXT_PUBLIC_*` variables.
-- **Supabase**: add the Vercel URL and `http://localhost:3000` as redirect URLs, and enable the login providers.
+- **Supabase**: set the Site URL to the Vercel URL, add `http://localhost:3000` as a redirect URL, keep sign-ups and Confirm email on (people create their own account on the login page). See [`docs/supabase-login.md`](docs/supabase-login.md).
 
 ## Tests
 
 ```bash
 cd backend                     #backend directory
-uv run pytest                  # offline and fast (the model is faked)
+uv run pytest                  # offline and fast (the model is faked); CI runs it on every PR
+cd ../frontend && npm run lint && npm test && npm run build
 uv run pytest -m live          # calls the real vision model
 uv run python -m scripts.eval_vision --trials 5   # does the model detect differences correctly?
 ```
 
 ## Status
-Working: screen frames to events (DeepSeek V4.1 Flash, about 1 to 2 s per frame), login check, per-user storage, database with row-level security.
-Not built yet: Yoda voice agents, question planner, step segmentation, skill synthesis, marketplace, learn mode. See the open issues for who is doing what.
+**Built:** screen capture with change detection, vision to events (DeepSeek V4.1 Flash, about 1 to 2 s per frame), PII redaction and off the record, question planner, Yoda voice (agents, signed URLs, voice UI, pause controller), steps and gap finder, debrief and teach-back, skill synthesizer, Holocron view, Jedi Archives, learn mode with the guardrail checker and mastery report, keyframes in Supabase Storage, Supabase login with self sign-up, CI.
+
+**Tested for real:** the pipeline against the real vision model and Supabase (two users, row-level security), spoken questions over a real ElevenLabs websocket, the guardrail checker (40 of 40 on hand-written cases), the debrief and learn flows in a browser with a fake screen share.
+
+**Not tested yet:** a browser session with a real microphone and the ElevenLabs agent, real screen recordings of a real workflow (#39), token renewal after an hour, the Supabase login on the deployed frontend (needs the dashboard settings in `docs/supabase-login.md`).
+
+**Known limits:** guardrail checks and gaps for unasked questions live partly in server memory (lost on restart), free-form names and addresses are not redacted, learners cannot see an author's keyframes.
 
 ## Team
 Javier Peres, Shibu Murugan, Umair Tufail, Deepika Sahi Kandanoor.

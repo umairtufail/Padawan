@@ -56,11 +56,11 @@ fe = [
  (0, "Landing + admin login", "public page, login form talks to the backend", True),
  (1, "Dashboard + session page", "backend status, sessions, live events", True),
  (3, "Screen capture + frame gate", "sends only changed frames; real share not tested yet", True),
- (7, "Holocron / Work Map view", "steps, reasons and guardrails of a session", False),
- (8, "Jedi Archives marketplace", "browse Holocrons, start a session", False),
- (9, "Learn session", "replay the Master's moment, stop before Save", False),
+ (7, "Holocron / Work Map view", "steps, reasons and guardrails of a session", True),
+ (8, "Jedi Archives marketplace", "browse Holocrons, start a session", True),
+ (9, "Learn session", "replay the Master's moment, stop before Save", True),
  (10, "Supabase login UI", "email and password, Supabase mode (admin login stays the default)", True),
- (11, "Yoda voice UI", "mic, captions, pause controller", False),
+ (11, "Yoda voice UI", "mic, captions, pause controller; real voice not tested", True),
 ]
 be = [
  (0, "Auth", "admin login + token check, Supabase JWT check", True),
@@ -68,20 +68,20 @@ be = [
  (2, "Storage layer", "memory, or Supabase as the user (RLS)", True),
  (3, "Frames API", "one call in flight, timeout, skip, never queue", True),
  (4, "Vision service + prompts", "frame + previous summary gives events", True),
- (5, "Question planner", "what Yoda asks (prompt written, no code)", False),
- (6, "Step segmenter + gap finder", "steps for the debrief", False),
- (7, "Skill synthesizer", "Holocron JSON + SKILL.md, quotes checked", False),
- (8, "Skills API", "list, publish, export", False),
- (9, "Guardrail checker", "learn mode: stop the wrong move before Save", False),
- (10, "PII redaction + off the record", "Presidio, nothing stored in the range", False),
- (11, "Voice sessions", "signed URLs for the Yoda agents", False),
+ (5, "Question planner", "what Yoda asks, anchored to real events", True),
+ (6, "Step segmenter + gap finder", "steps for the debrief", True),
+ (7, "Skill synthesizer", "Holocron JSON + SKILL.md, quotes checked", True),
+ (8, "Skills API", "list, publish, export", True),
+ (9, "Guardrail checker", "learn mode: stop the wrong move before Save", True),
+ (10, "PII redaction + off the record", "regex and checksums, nothing analysed off the record", True),
+ (11, "Voice sessions", "signed URLs for the Yoda agents", True),
 ]
 ext = [
  (0, "Supabase Auth", "email and password works; Google not set up", True),
  (2, "Supabase Postgres + RLS", "8 tables, sign-up trigger, owner policies", True),
  (4, "Nebius: DeepSeek V4.1 Flash", "vision model, 1 to 2 s per frame", True),
- (6, "Supabase Storage + Realtime", "keyframes bucket, live steps (enabled, unused)", False),
- (11, "ElevenLabs Agents", "Yoda interviewer + tutor", False),
+ (6, "Supabase Storage + Realtime", "keyframes bucket in use, Realtime unused", True),
+ (11, "ElevenLabs Agents", "Yoda interviewer + tutor", True),
 ]
 for i,t,s,b in fe:  box("fe", i, t, s, b)
 for i,t,s,b in be:  box("be", i, t, s, b)
