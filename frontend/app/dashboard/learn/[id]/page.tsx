@@ -10,11 +10,7 @@ import YodaFigure from "../../../../components/yoda-figure";
 import { ApiError } from "../../../../lib/api";
 import { createLearnSession } from "../../../../lib/learn-api";
 import type { LearnSessionOut } from "../../../../lib/learn";
-
-type DisplayMediaOptionsWithSelfExclusion = Omit<DisplayMediaStreamOptions, "video"> & {
-  selfBrowserSurface?: "include" | "exclude";
-  video: MediaTrackConstraints & { cursor?: "always" | "motion" | "never" };
-};
+import { assertNotPadawanSelfCapture, screenShareOptions } from "../../../../lib/screen-share";
 
 type Started = { session: LearnSessionOut; stream: MediaStream };
 
@@ -36,12 +32,8 @@ export default function LearnPage() {
     setPhase("choosing");
     let stream: MediaStream;
     try {
-      const options: DisplayMediaOptionsWithSelfExclusion = {
-        video: { frameRate: { ideal: 15, max: 30 }, cursor: "never" },
-        audio: false,
-        selfBrowserSurface: "exclude",
-      };
-      stream = await navigator.mediaDevices.getDisplayMedia(options);
+      stream = await navigator.mediaDevices.getDisplayMedia(screenShareOptions());
+      assertNotPadawanSelfCapture(stream);
     } catch (err) {
       setPhase("idle");
       setError(

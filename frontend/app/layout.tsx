@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono, Montserrat } from "next/font/google";
 import "./globals.css";
 import AuthSync from "../components/auth-sync";
+import CaptureIdentity from "../components/capture-identity";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <div className="starfield" aria-hidden="true" />
         <AuthSync />
+        <CaptureIdentity />
         {children}
       </body>
     </html>

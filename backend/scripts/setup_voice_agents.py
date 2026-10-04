@@ -152,7 +152,16 @@ def upsert_tools(c: httpx.Client) -> dict[str, str]:
     return ids
 
 
-def upsert_agent(c: httpx.Client, body: dict) -> str:
+def upsert_agent(c: httpx.Client, body: dict, configured_id: str = "") -> str:
+    # Prefer the id already used by the app. Accounts can contain duplicate agents with the same name;
+    # name-only lookup could update an unused duplicate while production keeps running the stale prompt.
+    if configured_id:
+        r = c.patch(f"/agents/{configured_id}", json=body)
+        if r.status_code != 404:
+            r.raise_for_status()
+            print(f"agent {body['name']}: updated configured agent")
+            return configured_id
+
     r = c.get("/agents", params={"search": body["name"], "page_size": 100})
     r.raise_for_status()
     found = [a["agent_id"] for a in r.json().get("agents", []) if a.get("name") == body["name"]]
@@ -191,12 +200,12 @@ def main() -> int:
             interviewer = upsert_agent(c, agent_body(
                 "Yoda (Interviewer)", "interviewer.system.md", "",
                 [tools[n] for n in INTERVIEWER_TOOLS], INTERVIEWER_VARS,
-            ))
+            ), settings.elevenlabs_interviewer_agent_id)
             tutor = upsert_agent(c, agent_body(
                 "Yoda (Tutor)", "tutor.system.md",
                 "Greetings, Padawan. {{expert}} taught me {{task_title}}. Ready to learn, are you?",
                 [tools[n] for n in TUTOR_TOOLS], TUTOR_VARS,
-            ))
+            ), settings.elevenlabs_tutor_agent_id)
     except httpx.HTTPStatusError as e:
         # Print the API's error text, never the request headers (they hold the key).
         print(f"ElevenLabs error {e.response.status_code}: {e.response.text[:800]}", file=sys.stderr)

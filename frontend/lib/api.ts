@@ -726,3 +726,17 @@ export async function startVoiceSession(sessionId: string, mode: VoiceMode, pend
     body: JSON.stringify({ session_id: sessionId, mode, pending_question: pendingQuestion }),
   });
 }
+
+/** Gets a short-lived interviewer connection for the dashboard readiness check; no Padawan session is created. */
+export async function startVoiceReadiness(): Promise<VoiceSession> {
+  if (MOCK) {
+    await sleep(150);
+    mockRequireToken();
+    return {
+      signed_url: "wss://mock.invalid/readiness",
+      agent_id: "mock-agent",
+      dynamic_variables: { mode: "live", task_title: "voice readiness check" },
+    };
+  }
+  return request("/v1/voice/readiness", { method: "POST" });
+}
