@@ -434,3 +434,31 @@ export async function exportSkill(id: string): Promise<string> {
   }
   return request(`/v1/skills/${encodeURIComponent(id)}/export`, {}, { text: true });
 }
+
+// ---------- voice (Yoda) ----------
+
+export type VoiceMode = "capture" | "debrief" | "tutor";
+
+export type VoiceSession = {
+  signed_url: string;
+  agent_id: string;
+  dynamic_variables: Record<string, string | number | boolean>;
+};
+
+/** Asks the backend for a short-lived signed URL to talk to Yoda (never the ElevenLabs key). One per conversation. */
+export async function startVoiceSession(sessionId: string, mode: VoiceMode, pendingQuestion = ""): Promise<VoiceSession> {
+  if (MOCK) {
+    await sleep(300);
+    mockRequireToken();
+    return {
+      signed_url: "wss://mock.invalid/voice",
+      agent_id: "mock-agent",
+      dynamic_variables: { mode: mode === "capture" ? "live" : mode, task_title: "Mock task", gaps: "", last_screen_summary: "", pending_question: pendingQuestion },
+    };
+  }
+  return request("/v1/voice/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, mode, pending_question: pendingQuestion }),
+  });
+}

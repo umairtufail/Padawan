@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { ApiError, getSession, type PadawanEvent, type SessionDetail } from "../../../../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ApiError, getSession, type FrameResponse, type PadawanEvent, type SessionDetail } from "../../../../lib/api";
+import type { CapturedFramePayload } from "../../../../lib/frame-delivery";
+import { useAgentConversation, type VoiceToolHandlers } from "../../../../lib/use-agent-conversation";
+import { useExpertSpeech } from "../../../../lib/use-expert-speech";
+import { usePauseController } from "../../../../lib/use-pause-controller";
+import YodaVoicePanel from "../../../../components/yoda-voice-panel";
+import WhyNowPanel from "../../../../components/why-now-panel";
 import { peekStream, releaseStream } from "../../../../lib/capture-handoff";
 import { useFrameBuffer } from "../../../../lib/use-frame-buffer";
 import ScreenCapture from "../../../screen-capture";
@@ -57,7 +63,46 @@ export default function TeachSessionPage() {
     }
   }, [id]);
 
-  const { items, push, counts, lastLatency } = useFrameBuffer(id, { onSettled: () => void refresh() });
+  // Yoda's voice: the frame buffer reports analysed frames through a stable forwarder (the pause controller is created below).
+  const frameResponseRef = useRef<((res: FrameResponse) => void) | null>(null);
+  const forwardResponse = useCallback((res: FrameResponse) => frameResponseRef.current?.(res), []);
+  const { items, push, counts, lastLatency } = useFrameBuffer(id, { onSettled: () => void refresh(), onResponse: forwardResponse });
+
+  const [offRecord, setOffRecord] = useState(false);
+  const offRecordRef = useRef(false);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const tools = useMemo<VoiceToolHandlers>(
+    () => ({
+      log_answer: ({ summary }) => setAnswers((a) => [...a, summary]),
+      set_off_record: ({ on }) => setOffRecord(on),
+    }),
+    [],
+  );
+  const convo = useAgentConversation({ sessionId: id, mode: "capture", tools });
+  const speech = useExpertSpeech(convo.status === "connected", convo.mock);
+  const lastFrameChangeAt = items.length ? items[items.length - 1].takenAt.getTime() : null;
+  const pause = usePauseController({
+    lastFrameChangeAt,
+    expertSpeaking: speech.speaking,
+    lastExpertSpeechAt: speech.lastSpeechAt,
+    connected: convo.status === "connected",
+    agentSpeaking: convo.agentSpeaking,
+    awaitingAnswer: convo.awaitingAnswer,
+    offRecord,
+    ask: convo.ask,
+    sendContext: convo.sendContext,
+  });
+  useEffect(() => {
+    frameResponseRef.current = pause.onFrameResponse;
+    offRecordRef.current = offRecord;
+  });
+  // Off the record: frames are not sent while the Master asked Yoda to pause the capture.
+  const pushFrame = useCallback(
+    (payload: CapturedFramePayload) => {
+      if (!offRecordRef.current) push(payload);
+    },
+    [push],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
@@ -93,7 +138,7 @@ export default function TeachSessionPage() {
         embedded
         showCaptures={false}
         initialStream={initialStream}
-        onFrame={push}
+        onFrame={pushFrame}
         stats={
           <>
             <Chip tone="info">{counts.captured} captured</Chip>
@@ -105,6 +150,34 @@ export default function TeachSessionPage() {
         }
       />
 
+      <YodaVoicePanel
+        status={convo.status}
+        error={convo.error || speech.error}
+        captions={convo.captions}
+        agentSpeaking={convo.agentSpeaking}
+        awaitingAnswer={convo.awaitingAnswer}
+        micOn={convo.micOn}
+        expertSpeaking={speech.speaking}
+        offRecord={offRecord}
+        waitingQuestions={pause.pending.length}
+        mock={convo.mock}
+        onStart={() => void convo.start()}
+        onStop={() => void convo.stop()}
+        onMic={convo.setMic}
+        onAskYoda={() => pause.askNow(session?.last_screen_summary ? "Why did you do that last step?" : "What are you doing right now, and why?")}
+        onSimulateSpeech={() => speech.simulate(4000)}
+      />
+
+      {answers.length > 0 && (
+        <section aria-labelledby="answers" className="rounded-2xl border border-gold/30 bg-surface/90 p-5">
+          <Label className="!text-gold">What Yoda learned</Label>
+          <h2 id="answers" className="sr-only">Answers logged by Yoda</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-fg">
+            {answers.map((a, i) => <li key={i}>{a}</li>)}
+          </ul>
+        </section>
+      )}
+
       <section aria-labelledby="screen" className="rounded-2xl border border-jade/30 bg-surface/90 p-5">
         <Label className="!text-jade">What Yoda sees now</Label>
         <h2 id="screen" className="sr-only">Latest screen summary</h2>
@@ -112,6 +185,15 @@ export default function TeachSessionPage() {
           {session ? session.last_screen_summary || "Nothing yet. The first look arrives a few seconds after recording starts." : "…"}
         </p>
       </section>
+
+      <WhyNowPanel
+        checks={pause.checks}
+        pending={pause.pending}
+        trace={pause.trace}
+        tools={convo.toolEvents}
+        asked={pause.asked}
+        budgetMax={pause.config.maxPerWindow}
+      />
 
       <FrameTimeline items={items} />
 

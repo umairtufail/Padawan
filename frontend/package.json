@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@elevenlabs/client": "1.26.0",
     "@supabase/supabase-js": "2.117.2",
     "next": "16.3.8",
     "react": "19.2.8",
