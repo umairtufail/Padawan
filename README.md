@@ -132,6 +132,8 @@ The repo is public: no secret is ever committed (see `AGENTS.md`, rule 1). The t
 | `SUPABASE_SERVICE_ROLE_KEY` | not used today | **never** |
 
 ## Deploying
+Live status checklist (tick as you deploy): [`docs/deployment.md`](docs/deployment.md#live-deployment-status-update-this-as-you-go).
+
 Full guide with the exact variables for FastAPI Cloud and Vercel, a verification checklist and troubleshooting: [`docs/deployment.md`](docs/deployment.md). **Never deploy with `AUTH_MODE=dev`**, it needs no login.
 
 - **Backend** (FastAPI Cloud): set the variables above, then `cd backend && uv run fastapi deploy`. Remember `ALLOWED_ORIGINS`, otherwise the browser is blocked by CORS.
