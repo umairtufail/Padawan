@@ -216,9 +216,11 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
         return;
       }
       conv.current = c;
-      // The mic to Yoda stays muted while the expert works; it opens when Yoda asks (or when the person turns it on).
-      c.setMicMuted(true);
-      setMicOnState(false);
+      // Capture: the mic to Yoda stays muted while the expert works and opens when Yoda asks (or when the person
+      // turns it on). Debrief and learn are real conversations: the mic stays open so Yoda always hears the answer.
+      const handsFree = mode !== "capture";
+      c.setMicMuted(!handsFree);
+      setMicOnState(handsFree);
       setStatus("connected");
     } catch (err) {
       setStatus("error");
