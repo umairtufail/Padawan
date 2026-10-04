@@ -28,3 +28,6 @@ __pycache__/
 *.log
 .vercel/
 .claude/worktrees/
+
+# vision recording eval output
+backend/eval_out/
