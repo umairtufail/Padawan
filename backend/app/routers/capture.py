@@ -202,10 +202,15 @@ async def teachback(
     )
     try:
         await repo.save_skill(user, rec)
-        await repo.set_session_state(user, session_id, status="done", skill_id=skill_id)
+        # The session is created with a placeholder name ("New task"): give it the skill's real name.
+        rename = skill.title if synthesizer.is_placeholder_title(session.title) else None
+        await repo.set_session_state(user, session_id, status="done", skill_id=skill_id, title=rename)
     except RepoError:
         raise _storage_error()
-    return SynthesizeOut(skill_id=skill_id, steps_count=rec.steps_count, guardrails_count=rec.guardrails_count, attempts=attempts)
+    return SynthesizeOut(
+        skill_id=skill_id, steps_count=rec.steps_count, guardrails_count=rec.guardrails_count, attempts=attempts,
+        title=skill.title, description=skill.description, summary=skill.summary,
+    )
 
 
 async def _try_status(repo, user, session_id, status) -> None:

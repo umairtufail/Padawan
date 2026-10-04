@@ -37,7 +37,7 @@ async def test_create_session_posts_owner_and_kind():
     def h(req):
         body = json.loads(req.content)
         assert req.method == "POST" and req.url.path == "/rest/v1/sessions"
-        assert body == {"user_id": USER.id, "kind": "teach", "title": "Invoices"}
+        assert body == {"user_id": USER.id, "kind": "teach", "title": "Invoices", "language": "de"}
         return httpx.Response(201, json=[{"id": SID, "user_id": USER.id, "title": "Invoices", "started_at": "2026-10-03T21:00:00+00:00"}])
 
     repo, _ = repo_with(h)
@@ -49,7 +49,9 @@ async def test_get_session_found_and_hidden():
     rows = [{"id": SID, "user_id": USER.id, "title": "T", "last_screen_summary": "cost center 4711", "started_at": "2026-10-03T21:00:00+00:00"}]
     repo, seen = repo_with(lambda r: httpx.Response(200, json=rows))
     rec = await repo.get_session(USER, SID)
-    assert rec.last_summary == "cost center 4711"
+    assert rec.last_summary == "cost center 4711" and rec.language == "en"  # column default
+    rows[0]["language"] = "de"
+    assert (await repo.get_session(USER, SID)).language == "de"  # the Master's language reaches the synthesizer
     assert f"id=eq.{SID}" in str(seen[0].url)
 
     repo, _ = repo_with(lambda r: httpx.Response(200, json=[]))  # row-level security hides other users' rows

@@ -132,6 +132,7 @@ async def list_sessions(user: AuthUser = Depends(current_user), repo: SessionRep
         SessionSummary(
             session_id=r.id, title=r.title, created_at=r.created_at,
             last_screen_summary=_summaries.get(r.id, r.last_summary), events_count=r.events_count,
+            status=r.status, skill_id=r.skill_id,
         )
         for r in rows
     ]

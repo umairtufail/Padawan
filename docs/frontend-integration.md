@@ -67,7 +67,7 @@ Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token
 ```
 
 ### List and read sessions
-- `GET /v1/sessions` returns the caller's sessions, newest first: `[{"session_id", "title", "created_at", "last_screen_summary", "events_count"}]`.
+- `GET /v1/sessions` returns the caller's sessions, newest first: `[{"session_id", "title", "created_at", "last_screen_summary", "events_count", "status", "skill_id"}]` (`status`: `live`, `debrief`, `processing`, `done`, `failed`; `skill_id` is set once the Holocron exists).
 - `GET /v1/sessions/{session_id}` returns the same fields plus `events`: `[{"id", "t_ms", "kind", "summary", "entities", "visible_text", "salient", "confidence"}]` in order (up to 200). `404` for an unknown session or someone else's.
 
 ### Send a screen frame
@@ -135,10 +135,11 @@ All of these return `404` for an unknown session or someone else's, and `502 {"d
 | `POST /v1/sessions/{id}/answers` | `{"question_id": "<qid>", "quote": "what the expert said", "summary": "", "t_ms": 21000}` (the interviewer tool `log_answer`; the quote is stored as an expert line and linked to the question) | `{"question_id", "utterance_id"}`. `404` if that question was never recorded with `.../asked` |
 | `GET /v1/sessions/{id}/steps` | none | `{"steps": [{"idx": 1, "title": "...", "t_start_ms": 1000, "t_end_ms": 9000, "event_ids": [41, 42], "question_ids": ["<qid>"], "status": "open"}]}` |
 | `POST /v1/sessions/{id}/finish` | none | `{"session_id", "status": "debrief", "steps": [...all closed], "gaps": [{"id": "gap-1", "type": "missing_reason", "text": "a question for the debrief", "step_idx": 1, "anchor_event_id": 42, "priority": 0.9}]}` |
-| `POST /v1/sessions/{id}/teachback` | `{"confirmed": true, "corrections": ["Hold applies to every supplier who double-bills in December"]}` | `{"skill_id", "status": "draft", "steps_count": 4, "guardrails_count": 3, "attempts": 1}` |
+| `POST /v1/sessions/{id}/teachback` | `{"confirmed": true, "corrections": ["Hold applies to every supplier who double-bills in December"]}` | `{"skill_id", "status": "draft", "steps_count": 4, "guardrails_count": 3, "attempts": 1, "title": "Re-code supplier invoices to the right cost center", "description": "...", "summary": "..."}` |
 
 Notes:
 - **Gap `type`**: `missing_reason`, `missing_guardrail`, `unasked_question`, `unclear_term`, `unseen_case`. Sorted by `priority`, at most 12. `unasked_question` gaps come from planner candidates kept in the backend's memory, so they are lost if the backend restarts mid-session.
+- **The model names the Holocron.** `title` is a specific 3 to 8 word name of the task in the session language (the prompt forbids placeholders; if the model returns "New task", "Untitled" or a whole sentence, the title falls back to the session title when that is a real name, else to the first steps). `description` is 1 to 2 sentences, `summary` one paragraph (what the Master showed and why; older skills have none, so treat it as optional). When the session title was still a placeholder, the session row is renamed to the skill title, so `GET /v1/sessions` lists a real name; it also has `status` and `skill_id` now.
 - **Teach-back runs synchronously**: it makes one model call (a second only if the quote check rejects the first answer), so expect roughly 3 to 30 s; show a spinner. `400` if `confirmed` is false, `409` if the session captured nothing, `502 {"detail": {"error": "synthesis_failed", "problems": ["..."]}}` if the model could not produce a skill whose quotes all exist in the transcript (nothing is saved, the session is marked `failed`, calling again retries). Calling it again for the same session updates the same skill (and keeps it published if it was).
 - **Steps are built in the background** every 10 events or 20 s while frames arrive, and finally by `finish`. A step ends on: a different entity in focus (another invoice), a save or submit, a navigation, a long idle gap, or the expert saying "next" or "okay then".
 - **Not done yet**: transcript lines are **not redacted** (the PII ticket), `finish` does not return an ElevenLabs `signed_url`, and the off-record endpoint does not exist.
@@ -208,7 +209,7 @@ export type SkillStep = {
   guardrails: Guardrail[]; predict_prompt: string | null;
 };
 export type SkillJson = {
-  id: string; title: string; description: string; author: { id: string; name: string }; created_at: string; language: string;
+  id: string; title: string; description: string; summary?: string; author: { id: string; name: string }; created_at: string; language: string;
   steps: SkillStep[]; global_guardrails: Guardrail[]; teachback: { confirmed: boolean; corrections: string[] };
 };
 export type SkillSummary = {
@@ -310,12 +311,12 @@ The contract in sections 3 and 3b is what `frontend/lib/api.ts` implements (no a
 
 - **Live session** (`/dashboard/teach/[id]`): transcript lines go to `utterances` in batches every 4 s (expert lines are skipped while off the record); when the pause controller sends a question, the page calls `questions/{qid}/asked` with the "why now" trace (the candidate `id` is used when it is a UUID, stub and manual questions get a client UUID); `log_answer` calls `answers` with the expert's transcribed words as `quote`. `question_candidates` feed the pause controller; the stub question source only runs when a frame brings none. Steps come from `GET steps` every 4 s and at once when `step_update` changes.
 - **Finish session** calls `finish`, keeps the result in `sessionStorage`, and opens `/dashboard/teach/[id]/debrief`.
-- **Debrief**: the voice session (`mode=debrief`) starts by itself, Yoda asks the gaps aloud and explains the process back, and `submit_teachback` (or the mock "yes, exactly" button) calls `teachback`, then the page opens the new draft at `/dashboard/skills/[id]`, which has the Publish button. Typed answers are an accessibility fallback (no microphone, or the connection failed). At least 3 gap answers (or all, if fewer) are required before the teach-back.
+- **Debrief**: the voice session (`mode=debrief`) starts by itself, Yoda asks the gaps aloud and explains the process back, and `submit_teachback` (or the mock "yes, exactly" button) calls `teachback`, then the debrief shows the name, description and summary Yoda wrote for a few seconds and opens the new draft at `/dashboard/skills/[id]`, which has the Publish button. Typed answers are an accessibility fallback (no microphone, or the connection failed). At least 3 gap answers (or all, if fewer) are required before the teach-back.
 - **Archives** use `GET /v1/skills` (published) and `?mine=true` ("My Holocrons", drafts included). A `SkillDetail` has the skill JSON under `skill` (can be `null`); `reason` can be `null`, guardrails have `source`.
 - **Marketplace** (Archives): the grid passes `sort=newest|popular|mastery`; the domain chips come from the loaded list and filter client-side. Cards and the Holocron page show `learners_count` and `avg_mastery` (hidden when 0 or null; scale assumed 0 to 100). The author sees "Unpublish" (`POST /v1/skills/{id}/unpublish`) on a published skill; ownership is detected by the id being in `GET /v1/skills?mine=true`. **My learning** (`/dashboard/learning`) uses `GET /v1/learn/sessions`; finished rows open `/dashboard/learning/{session_id}`, which renders `GET /v1/learn/sessions/{id}/report`. A lesson cannot be resumed (the lesson page always creates a new session), so unfinished rows say "Start the lesson again". `skill_id` can be `null` in that list (skill deleted).
 - Keyframe images are not shown yet: a step shows the timestamp and `screen_moment.description`. "Start learning" links to `/dashboard/learn/{id}` (see section 10, "The learn page").
 
-Optional backend settings for the question planner and synthesizer (all have defaults): `NEBIUS_TEXT_MODEL` (empty = same as `NEBIUS_VLM_MODEL`), `PLANNER_TIMEOUT_S` (5), `SYNTHESIS_TIMEOUT_S` (60), `SEGMENTER_EVERY_EVENTS` (10), `SEGMENTER_EVERY_S` (20).
+Optional backend settings for the question planner and synthesizer (all have defaults): `NEBIUS_TEXT_MODEL` (empty = same as `NEBIUS_VLM_MODEL`; one model for the planner and the synthesizer; measured on our samples: DeepSeek V4.1 Flash, V4 Pro and GLM-5.3 all gave good English titles in 2 to 4 s, but only GLM-5.3 kept to the draft steps on a German sample, so it is the one to try for synthesis, the default is unchanged because the planner has not been measured with it), `PLANNER_TIMEOUT_S` (5), `SYNTHESIS_TIMEOUT_S` (60), `SEGMENTER_EVERY_EVENTS` (10), `SEGMENTER_EVERY_S` (20).
 
 ## 10. Learn mode (the Padawan works through a Holocron, Yoda tutors)
 

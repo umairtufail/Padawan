@@ -41,7 +41,7 @@ Browser (Next.js on Vercel)                       FastAPI on FastAPI Cloud      
 2. **Understand:** the backend asks a vision model what *changed* compared with the previous frame and returns structured events.
 3. **Ask:** a pause controller decides when Yoda speaks (screen idle, expert silent, question budget left).
 4. **Debrief:** when the expert finishes, Yoda asks the open gap questions by voice and explains the process back (teach-back).
-5. **Holocron:** the confirmed session becomes a skill (steps, reasons, guardrails, quotes), reviewed and published to the Jedi Archives.
+5. **Holocron:** the confirmed session becomes a skill (steps, reasons, guardrails, quotes), reviewed and published to the Jedi Archives. The Nebius text model names it (a specific 3 to 8 word title in the session language, never "New task"), writes a description and a one-paragraph summary, and the session list takes over that name.
 6. **Learn:** a new hire picks a Holocron and shares their screen; Yoda tutors by voice, asks for predictions, stops the wrong move before Save, and ends with a mastery report.
 
 Yoda always speaks his questions aloud (realtime ElevenLabs voice); the text on screen is only captions.
@@ -106,7 +106,7 @@ Every endpoint except `/health` needs a Bearer token. Full shapes, TypeScript ty
 |---|---|
 | Health, login | `GET /health`, `POST /v1/auth/login` (demo, `dev` and `admin` modes) |
 | Teach sessions | `POST /v1/teach/sessions`, `GET /v1/sessions`, `GET /v1/sessions/{id}`, `POST /v1/sessions/{id}/frames` (JPEG in, events, question candidates and step update out), `POST /v1/sessions/{id}/off-the-record`, `GET /v1/sessions/{id}/keyframes/{t_ms}` |
-| Debrief | `POST /v1/sessions/{id}/utterances`, `.../questions/{qid}/asked`, `.../answers`, `GET .../steps`, `POST .../finish` (steps and gaps), `POST .../teachback` (draft Holocron) |
+| Debrief | `POST /v1/sessions/{id}/utterances`, `.../questions/{qid}/asked`, `.../answers`, `GET .../steps`, `POST .../finish` (steps and gaps), `POST .../teachback` (draft Holocron, returns its AI `title`, `description`, `summary`) |
 | Holocrons | `GET /v1/skills`, `GET /v1/skills/{id}`, `POST /v1/skills/{id}/publish`, `GET /v1/skills/{id}/export` (SKILL.md) |
 | Learn | `POST /v1/learn/sessions`, `.../frames` (adds a `verdict`: ok, warn, stop), `.../predictions`, `.../report`, `.../finish` |
 | Voice | `POST /v1/voice/sessions` (signed URL and variables for the Yoda interviewer or tutor) |
@@ -126,6 +126,7 @@ The repo is public: no secret is ever committed (see `AGENTS.md`, rule 1). The t
 | `NEXT_PUBLIC_AUTH_MODE` | | `admin` (default) or `supabase`, must match the backend's `AUTH_MODE` ([`docs/supabase-login.md`](docs/supabase-login.md)) |
 | `NEXT_PUBLIC_API_URL` | | `http://localhost:8000` locally, the FastAPI Cloud URL deployed |
 | `NEBIUS_API_KEY` (secret), `NEBIUS_BASE_URL`, `NEBIUS_VLM_MODEL` | yes | |
+| `NEBIUS_TEXT_MODEL` | no | text model for the question planner and the skill synthesizer; empty = the vision model. `zai-org/GLM-5.3` is worth trying for synthesis (see `docs/frontend-integration.md`) |
 | `ELEVENLABS_API_KEY` (secret), `ELEVENLABS_*_AGENT_ID` | yes | |
 | `ALLOWED_ORIGINS` | the frontend URLs, comma separated (include the Vercel URL) | |
 | `SUPABASE_SERVICE_ROLE_KEY` | not used today | **never** |
@@ -150,7 +151,7 @@ uv run python -m scripts.eval_vision --trials 5   # does the model detect differ
 ## Status
 **Built:** screen capture with change detection, vision to events (DeepSeek V4.1 Flash, about 1 to 2 s per frame), PII redaction and off the record, question planner, Yoda voice (agents, signed URLs, voice UI, pause controller), steps and gap finder, debrief and teach-back, skill synthesizer, Holocron view, Jedi Archives, learn mode with the guardrail checker and mastery report, keyframes in Supabase Storage, Supabase login with self sign-up, CI.
 
-**Tested for real:** the pipeline against the real vision model and Supabase (two users, row-level security), spoken questions over a real ElevenLabs websocket, the guardrail checker (40 of 40 on hand-written cases), the debrief and learn flows in a browser with a fake screen share.
+**Tested for real:** the whole teach flow (session, frames, utterances, a question and its answer, finish, teach-back) against the real models and Supabase as a real test user: every table is written and the skill and the session carry the AI title and summary (a German session gets a German title); the pipeline against the real vision model and Supabase (two users, row-level security), spoken questions over a real ElevenLabs websocket, the guardrail checker (40 of 40 on hand-written cases), the debrief and learn flows in a browser with a fake screen share.
 
 **Not tested yet:** a browser session with a real microphone and the ElevenLabs agent, real screen recordings of a real workflow (#39), token renewal after an hour, the Supabase login on the deployed frontend (needs the dashboard settings in `docs/supabase-login.md`).
 

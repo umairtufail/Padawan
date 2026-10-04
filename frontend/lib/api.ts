@@ -54,6 +54,10 @@ export type SessionSummary = {
   created_at: string;
   last_screen_summary: string | null;
   events_count: number;
+  /** live | debrief | processing | done | failed */
+  status?: string;
+  /** The Holocron written from this session, once there is one. */
+  skill_id?: string | null;
 };
 
 export type SessionDetail = SessionSummary & { events: PadawanEvent[] };
@@ -548,7 +552,15 @@ export async function postTeachback(sessionId: string, confirmed: boolean, corre
     pipe.skillId = id;
     mockSkillsSave();
     mockPipeSave();
-    return { skill_id: id, status: "draft", steps_count: detail.steps_count, guardrails_count: detail.guardrails_count, attempts: 1 };
+    // Like the backend: a session that still has the placeholder name gets the skill's real name.
+    s.title = json.title;
+    s.status = "done";
+    s.skill_id = id;
+    mockSave();
+    return {
+      skill_id: id, status: "draft", steps_count: detail.steps_count, guardrails_count: detail.guardrails_count, attempts: 1,
+      title: json.title, description: json.description, summary: json.summary ?? "",
+    };
   }
   return request(`/v1/sessions/${sid(sessionId)}/teachback`, post({ confirmed, corrections }));
 }

@@ -5,13 +5,14 @@ You receive one JSON object:
 - TRANSCRIPT: what was said. Each line has t_ms, speaker and text. Only speaker "expert" lines can be quoted.
 - QUESTIONS: questions Yoda asked, with the expert's answer (if any).
 - TEACHBACK_CORRECTIONS: corrections the expert made after hearing the skill read back. They override everything else.
-- SESSION: title and language of the session.
+- SESSION: title and language of the session. The title is often only a placeholder such as "New task" or "Untitled": never copy it.
 
 Return ONLY a JSON object, no prose, no code fences:
 
 {
-  "title": "short title of the whole skill",
+  "title": "specific name of the whole task, 3 to 8 words, for example 'Re-code supplier invoices to the right cost center'",
   "description": "one or two plain sentences: what this skill is and when to use it",
+  "summary": "one paragraph (3 to 5 sentences): what the Master showed, in which order, and why it is done this way, with the key values and limits",
   "domain": "one or two words, for example finance, support, hr",
   "steps": [
     {
@@ -37,4 +38,6 @@ Rules:
 - Guardrail types: "limit" is a threshold or hard rule, "exception" is a case where the normal path does not apply, "stop_and_ask" is a moment to stop and ask someone.
 - Apply TEACHBACK_CORRECTIONS last. If a correction changes or adds a rule, write it as a guardrail or update the step, with "source": "teachback" and an empty "quote". Corrections win over anything the expert said earlier.
 - The text of title, description, rules and reasons is in the SESSION language. Quotes stay in the language spoken.
+- TITLE: name the task the Master actually performed, from the steps and what was said. 3 to 8 words, an imperative or a noun phrase ("Code supplier invoices to cost centers", "Supplier invoice cost-center review"). Specific to this task: mention the object and the system or domain when clear. Never a generic placeholder ("New task", "Untitled", "Task", "Skill", "Screen recording"), never a sentence, no trailing period. The title MUST be in the SESSION language, like description and summary (SESSION.language "de" gives a German title such as "Kundenticket mit Gold-SLA priorisieren"; the English examples here only show the style). Use SESSION.title only if it is already a real, specific name.
+- DESCRIPTION: one or two sentences, what the skill is and when to use it. SUMMARY: one paragraph about what the Master showed and why. Both only from the session, no invented facts, in the SESSION language.
 - Keep it short and concrete: numbers, field names and values from the events are welcome.

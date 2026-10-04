@@ -75,6 +75,17 @@ export function findGaps(steps: StepDraft[], events: MockEvent[]): Gap[] {
   return gaps.sort((a, b) => b.priority - a.priority).slice(0, 12);
 }
 
+const PLACEHOLDER_TITLE = /^\s*(new task|untitled( task| session)?( \d+)?|task|skill|session|)\s*$/i;
+
+/** Session titles start as "New task": a skill gets a real name (the backend asks the model; the mock uses the first steps). */
+export function skillTitle(sessionTitle: string, steps: Pick<StepDraft, "title">[]): string {
+  if (!PLACEHOLDER_TITLE.test(sessionTitle)) return sessionTitle.trim();
+  const first = steps.map((s) => s.title.replace(/[.?!]+$/, "").trim()).filter(Boolean).slice(0, 2);
+  const words = (first[0] ?? "").split(/\s+/).filter(Boolean);
+  if (words.length < 3 && first[1]) words.push("/", ...first[1].split(/\s+/));
+  return words.slice(0, 8).join(" ") || "Recorded task";
+}
+
 type SynthInput = {
   id: string;
   title: string;
@@ -118,8 +129,10 @@ export function synthesizeMockSkill(i: SynthInput): SkillJson {
   const correctionGuardrails = i.corrections.map((c) => ({
     id: `g${++n}`, type: "limit", rule: c, quote: "", t_ms: null, source: "teachback" as const,
   }));
+  const title = skillTitle(i.title, i.steps);
   return {
-    id: i.id, title: i.title, description: `Taught in the session "${i.title}" (mock synthesis, not a model).`,
+    id: i.id, title, description: `Taught in the session "${title}" (mock synthesis, not a model).`,
+    summary: `The Master walked through ${steps.length} ${steps.length === 1 ? "step" : "steps"}: ${steps.map((s) => s.title.replace(/[.?!]+$/, "")).join(", then ")}. (Mock summary, not a model.)`,
     author: i.author, created_at: i.now, language: "en", steps, global_guardrails: correctionGuardrails,
     teachback: { confirmed: true, corrections: i.corrections },
   };

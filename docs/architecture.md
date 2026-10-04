@@ -16,12 +16,12 @@ Last checked against the code: 2026-10-04.
 | Sessions API, Frames API | Built | create, list, detail, frames; one call in flight, timeout, skip instead of failing |
 | Vision service + prompts | Built | DeepSeek V4.1 Flash on Nebius, about 1 to 2 s per frame; 25 of 25 difference checks on our mock ERP frames (not yet tested on real screens) |
 | Storage layer | Built | in memory (dev, admin), or Supabase called as the user (supabase mode); the deployed backend uses memory |
-| Supabase database | Built | 8 tables with row-level security, sign-up profile trigger, owner write policies |
+| Supabase database | Built | 8 tables with row-level security, sign-up profile trigger, owner write policies, `sessions.language` |
 | Supabase Auth login | Built | email and password, tested live (`docs/supabase-login.md`); not switched on in the deployments yet, Google not set up (#40) |
 | Supabase Storage (keyframes) | Built | private bucket, step keyframes with signed URLs; Realtime is still unused |
 | Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Built | both agents created, signed-URL endpoint, auto-start voice UI; spoken questions verified over a real websocket, **not yet with a browser microphone** |
 | Question planner | Built | `backend/app/prompts/question_planner.system.md`, anchored to real events, 5 of 6 live trials |
-| Step segmenter, gap finder, skill synthesizer, skills API | Built | debrief, teach-back, draft Holocron, publish; steps on real captures not yet judged |
+| Step segmenter, gap finder, skill synthesizer, skills API | Built | debrief, teach-back, draft Holocron, publish; the text model names the skill (title, description, summary) and the session takes that name; steps on real captures not yet judged |
 | Holocron view, Jedi Archives marketplace, learn session | Built | `/dashboard/skills`, `/dashboard/learn/[id]` |
 | Guardrail checker | Built | stop, warn, ok with confidence; 40 of 40 on hand-written cases (not real frames) |
 | PII redaction, off the record | Built | regex and checksum redaction, off-the-record switch (kept in memory) |

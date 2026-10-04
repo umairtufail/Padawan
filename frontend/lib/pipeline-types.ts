@@ -65,4 +65,8 @@ export type TeachbackResult = {
   steps_count: number;
   guardrails_count: number;
   attempts: number;
+  /** What the model wrote for the new Holocron (a real name, never "New task"). */
+  title: string;
+  description: string;
+  summary: string;
 };

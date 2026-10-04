@@ -35,6 +35,8 @@ export type SkillJson = {
   id: string;
   title: string;
   description: string;
+  /** One paragraph written by the model: what the Master showed and why. Missing on older skills. */
+  summary?: string;
   author: { id: string; name: string };
   created_at: string;
   language: string;
@@ -48,6 +50,8 @@ export type SkillSummary = {
   id: string;
   title: string;
   description: string;
+  /** One paragraph: what the Master showed and why ("" for skills made before summaries existed). */
+  summary: string;
   domain: string | null;
   language: string;
   status: SkillStatus;
@@ -74,7 +78,7 @@ export function countGuardrails(skill: Pick<SkillJson, "steps" | "global_guardra
 
 export function toSummary(d: SkillDetail): SkillSummary {
   return {
-    id: d.id, title: d.title, description: d.description, domain: d.domain, language: d.language,
+    id: d.id, title: d.title, description: d.description, summary: d.summary, domain: d.domain, language: d.language,
     status: d.status, author: d.author, steps_count: d.steps_count, guardrails_count: d.guardrails_count,
     created_at: d.created_at, published_at: d.published_at, learners_count: d.learners_count, avg_mastery: d.avg_mastery,
   };
@@ -92,7 +96,7 @@ export function detailFromSkill(
   },
 ): SkillDetail {
   return {
-    id: json.id, title: json.title, description: json.description, language: json.language,
+    id: json.id, title: json.title, description: json.description, summary: json.summary ?? "", language: json.language,
     author: json.author, created_at: json.created_at, learners_count: 0, avg_mastery: null, ...extra,
     steps_count: json.steps.length, guardrails_count: countGuardrails(json),
     skill: json, skill_md: skillToMarkdown(json),
@@ -114,7 +118,7 @@ export function filterSkills(skills: SkillSummary[], query: string): SkillSummar
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return skills;
   return skills.filter((s) => {
-    const hay = `${s.title} ${s.description} ${s.domain ?? ""} ${s.author.name}`.toLowerCase();
+    const hay = `${s.title} ${s.description} ${s.summary} ${s.domain ?? ""} ${s.author.name}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }

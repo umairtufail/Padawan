@@ -37,7 +37,7 @@ describe("formatTimestamp", () => {
 function row(id: string, over: Partial<SkillSummary> = {}): SkillSummary {
   return {
     id, title: id, description: "", domain: null, language: "en", status: "published", author: { id: "a", name: "A" },
-    steps_count: 1, guardrails_count: 0, created_at: "2026-01-01T00:00:00Z", published_at: null, learners_count: 0, avg_mastery: null, ...over,
+    steps_count: 1, guardrails_count: 0, created_at: "2026-01-01T00:00:00Z", published_at: null, learners_count: 0, avg_mastery: null, ...over, summary: over.summary ?? "",
   };
 }
 
@@ -87,7 +87,7 @@ describe("marketplace helpers", () => {
 
 describe("filterSkills", () => {
   const mk = (title: string, name: string, domain: string | null): SkillSummary => ({
-    id: title, title, description: "desc", domain, language: "en", status: "published",
+    id: title, title, description: "desc", summary: "", domain, language: "en", status: "published",
     author: { id: name, name }, steps_count: 1, guardrails_count: 0, created_at: "", published_at: null,
     learners_count: 0, avg_mastery: null,
   });
