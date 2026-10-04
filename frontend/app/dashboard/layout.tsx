@@ -11,7 +11,7 @@ import { btnGhost } from "../../components/ui";
 const nav = [
   { href: "/dashboard", label: "Overview", exact: true },
   { href: "/dashboard/teach", label: "Teach Yoda", exact: false },
-  { href: "/dashboard/archives", label: "Jedi Archives", disabled: true },
+  { href: "/dashboard/skills", label: "Jedi Archives", exact: false },
   { href: "/dashboard/capture", label: "Capture", exact: false },
 ] as const;
 
@@ -40,14 +40,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Logo href="/dashboard" />
           <nav aria-label="Dashboard" className="order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto sm:flex-1">
             {nav.map((item) => {
-              if ("disabled" in item) {
-                return (
-                  <span key={item.href} aria-disabled="true" className="flex cursor-not-allowed items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted">
-                    {item.label}
-                    <span className="rounded border border-line px-1.5 font-mono text-[10px] uppercase">soon</span>
-                  </span>
-                );
-              }
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
               return (
                 <Link
