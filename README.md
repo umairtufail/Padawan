@@ -57,7 +57,7 @@ AGENTS.md    rules for everyone working here, human or AI
 You need [uv](https://docs.astral.sh/uv/) (backend) and Node 20+ (frontend).
 
 ```bash
-# the repo-root .env is already in the repo (team keys; the repo is private). Just pull.
+# copy the team keys from the Notion page "Keys and environment values" into a repo-root .env (gitignored)
 # If you ever need a fresh one: cp .env.example .env and fill it in.
 
 # backend  -> http://localhost:8000  (docs at /docs)
@@ -91,7 +91,7 @@ Frames go **straight from the browser to the backend**, never through a Next.js 
 
 ## Configuration
 
-The team `.env` is committed in this private repo for the hackathon (see `AGENTS.md`, rule 1). Never share it outside the four team members and never make the repo public.
+The repo is public: no secret is ever committed (see `AGENTS.md`, rule 1). The team keys live on the private Notion page "Keys and environment values".
 
 | Variable | Backend `.env` / FastAPI Cloud | Frontend `.env.local` / Vercel |
 |---|---|---|

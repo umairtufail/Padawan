@@ -4,7 +4,7 @@ How to run the backend locally and call it from the Next.js app. Everything here
 
 ## 1. Run the backend
 
-You need [uv](https://docs.astral.sh/uv/). The repo-root `.env` is already in the repo with the team keys (private repo), so after `git pull` there is nothing to fill in.
+You need [uv](https://docs.astral.sh/uv/). Copy the team keys from the Notion page "Keys and environment values" into a repo-root `.env` (gitignored).
 
 ```bash
 cd backend
