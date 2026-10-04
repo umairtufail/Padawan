@@ -248,17 +248,21 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
     conv.current?.sendContextualUpdate(text);
   }, []);
 
+  const openAnswerWindow = useCallback(() => {
+    setAwaitingAnswer(true);
+    awaitingAnswerRef.current = true;
+    syncMic();
+    if (answerTimer.current !== null) window.clearTimeout(answerTimer.current);
+    answerTimer.current = later(closeAnswerWindow, ANSWER_WAIT_MS);
+  }, [syncMic, later, closeAnswerWindow]);
+
   /** Make Yoda ask `question` aloud and open the mic for the answer. */
   const ask = useCallback(
     (question: string) => {
       const q = question.trim();
       if (!q) return false;
       if (status !== "connected") return false;
-      setAwaitingAnswer(true);
-      awaitingAnswerRef.current = true;
-      syncMic();
-      if (answerTimer.current !== null) window.clearTimeout(answerTimer.current);
-      answerTimer.current = later(closeAnswerWindow, ANSWER_WAIT_MS);
+      openAnswerWindow();
 
       if (MOCK) {
         // A scripted Yoda: speaks the question, then a simulated expert answer is logged.
@@ -278,8 +282,24 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       }
       return true;
     },
-    [status, syncMic, later, closeAnswerWindow, addCaption, runTool],
+    [status, openAnswerWindow, later, addCaption, runTool],
   );
+
+  /** The person seems away: Yoda asks once whether they are still there, and the mic opens for the reply. */
+  const checkIn = useCallback(() => {
+    if (status !== "connected") return false;
+    openAnswerWindow();
+    if (MOCK) {
+      later(() => {
+        setAgentSpeaking(true);
+        addCaption("yoda", "Are you still there?");
+      }, 300);
+      later(() => setAgentSpeaking(false), 2000);
+    } else {
+      conv.current?.sendUserMessage("[CHECKIN]");
+    }
+    return true;
+  }, [status, openAnswerWindow, later, addCaption]);
 
   /**
    * A plain command to Yoda (for example "[START]" in debrief mode). With mock voice there is no agent: `mockSpeech`
@@ -347,7 +367,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
 
   return {
     status, error, captions, toolEvents, agentSpeaking, micOn, awaitingAnswer,
-    start, stop, setMic, sendContext, ask, sendMessage, simulateExpertLine, tell,
+    start, stop, setMic, sendContext, ask, checkIn, sendMessage, simulateExpertLine, tell,
     /** Mock mode only: lets the page type a fake expert line. */
     mock: MOCK,
   };

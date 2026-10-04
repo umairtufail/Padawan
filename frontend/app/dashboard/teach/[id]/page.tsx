@@ -125,6 +125,7 @@ export default function TeachSessionPage() {
     void convo.start();
   }, [initialStream, convo]);
   const lastFrameChangeAt = items.length ? items[items.length - 1].takenAt.getTime() : null;
+  const [resting, setResting] = useState(false);
   const pause = usePauseController({
     lastFrameChangeAt,
     expertSpeaking: speech.speaking,
@@ -136,6 +137,11 @@ export default function TeachSessionPage() {
     ask: convo.ask,
     sendContext: convo.sendContext,
     onAsked: sync.onAsked,
+    checkIn: convo.checkIn,
+    rest: () => {
+      setResting(true);
+      void convo.stop();
+    },
   });
   useEffect(() => {
     frameResponseRef.current = (res) => {
@@ -247,6 +253,12 @@ export default function TeachSessionPage() {
         }
       />
 
+      {resting && convo.status === "idle" && (
+        <p className="rounded-xl border border-gold/40 bg-gold/5 p-4 text-sm text-fg" role="status">
+          Yoda is resting: nothing moved on screen and nobody spoke for a few minutes. Recording goes on. Press Wake Yoda when you continue.
+        </p>
+      )}
+
       <YodaVoicePanel
         status={convo.status}
         error={convo.error || speech.error}
@@ -258,7 +270,10 @@ export default function TeachSessionPage() {
         offRecord={offRecord}
         waitingQuestions={pause.pending.length}
         mock={convo.mock}
-        onStart={() => void convo.start()}
+        onStart={() => {
+          setResting(false);
+          void convo.start();
+        }}
         onStop={() => void convo.stop()}
         onMic={convo.setMic}
         onAskYoda={() => pause.askNow(session?.last_screen_summary ? "Why did you do that last step?" : "What are you doing right now, and why?")}

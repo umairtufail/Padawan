@@ -5,7 +5,7 @@ import type { TraceEntry } from "../lib/use-pause-controller";
 import type { ToolEvent } from "../lib/use-agent-conversation";
 import { Chip, Label } from "./ui";
 
-const KIND_TONE = { ask: "jade", manual: "gold", skip: "muted", queued: "info", context: "muted" } as const;
+const KIND_TONE = { ask: "jade", manual: "gold", skip: "muted", queued: "info", context: "muted", presence: "gold" } as const;
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour12: false });
 
 type Props = {
