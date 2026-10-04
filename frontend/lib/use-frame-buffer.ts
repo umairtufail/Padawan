@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, sendFrame, type PadawanEvent } from "./api";
+import { ApiError, sendFrame, type FrameResponse, type PadawanEvent } from "./api";
 import type { CapturedFramePayload, ChangeRegion } from "./frame-delivery";
 
 export type FrameStatus = "queued" | "sending" | "analyzed" | "skipped" | "failed" | "dropped";
@@ -37,6 +37,8 @@ type Options = {
   maxItems?: number;
   /** Called after every frame has been handled (to refresh the session). */
   onSettled?: () => void;
+  /** Called with every analysed frame response (question candidates, events, screen summary). */
+  onResponse?: (res: FrameResponse) => void;
 };
 
 const MAX_WIDTH = 1024;
@@ -68,7 +70,7 @@ async function downscale(blob: Blob): Promise<Blob> {
  * (which analyses one frame at a time), and every item keeps its capture time and the model's description.
  * `items` is oldest first.
  */
-export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 80, onSettled }: Options = {}) {
+export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 80, onSettled, onResponse }: Options = {}) {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const queue = useRef<string[]>([]);
   const blobs = useRef(new Map<string, Blob>());
@@ -80,9 +82,12 @@ export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 
   const attempts = useRef(new Map<string, number>());
   const reasons = useRef(new Map<string, "initial" | "change">());
 
+  const responseRef = useRef(onResponse);
+
   useEffect(() => {
     settledRef.current = onSettled;
-  }, [onSettled]);
+    responseRef.current = onResponse;
+  }, [onSettled, onResponse]);
 
   const patch = useCallback((id: string, change: Partial<TimelineItem>) => {
     if (!mounted.current) return;
@@ -115,6 +120,11 @@ export function useFrameBuffer(sessionId: string, { maxBuffered = 6, maxItems = 
             } else {
               blobs.current.delete(id);
               patch(id, { status: "analyzed", latencyMs: res.latency_ms, events: res.events, summary: res.screen_summary, note: "" });
+              try {
+                responseRef.current?.(res);
+              } catch {
+                /* a listener must never break the stream */
+              }
             }
           } catch (err) {
             blobs.current.delete(id);
