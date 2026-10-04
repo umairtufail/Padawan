@@ -17,12 +17,12 @@ Last checked against the code: 2026-10-04.
 | Vision service + prompts | Built | DeepSeek V4.1 Flash on Nebius, about 1 to 2 s per frame; 25 of 25 difference checks on our mock ERP frames (not yet tested on real screens) |
 | Storage layer | Built | in memory (dev, admin), or Supabase called as the user (supabase mode); the deployed backend uses memory |
 | Supabase database | Built | 8 tables with row-level security, sign-up profile trigger, owner write policies |
-| Supabase Auth login | Not built | providers not enabled, no login UI yet (tickets #1, #8) |
+| Supabase Auth login | Not built | providers not enabled, no login UI yet (#40) |
 | Supabase Storage + Realtime | Not built | bucket and publication exist but nothing uses them |
-| Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Not built | tickets #6, #16 |
-| Question planner | Not built | prompt written (`backend/app/prompts/question_planner.system.md`), no code (#5) |
+| Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Not built | tickets #25, #26, #28 |
+| Question planner | Not built | prompt written (`backend/app/prompts/question_planner.system.md`), no code (#27) |
 | Step segmenter, gap finder, skill synthesizer, skills API | Not built | needed for the debrief, the Holocron and the marketplace |
-| Holocron view, Jedi Archives marketplace, learn session | Not built | tickets #13, #15 |
+| Holocron view, Jedi Archives marketplace, learn session | Not built | tickets #33, #34, #37 |
 | Guardrail checker | Not built | learn mode, stops the wrong move before Save |
 | PII redaction, off the record | Not built | Presidio is not used anywhere yet |
 

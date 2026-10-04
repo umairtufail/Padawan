@@ -12,7 +12,7 @@ The schema is already applied to the project. `migrations/20261003212719_init_pa
   - The **browser** uses the publishable key plus the user's session, so RLS applies. A user reads their own sessions and their children (events, utterances, questions, steps), published skills from anyone, and manages their own skills. Anonymous users get nothing.
 - **Storage**: private bucket `keyframes` (the backend uses signed URLs, there are no public or per-user policies).
 - **Realtime** is on for `steps_draft` (the live step ticker). RLS applies to it too.
-- `sessions.last_screen_summary` holds the previous frame summary the vision model needs (see issue #4).
+- `sessions.last_screen_summary` holds the previous frame summary the vision model needs (see issue #29).
 
 ## Keys and where they go
 | Value | Where | Secret? |
@@ -22,7 +22,7 @@ The schema is already applied to the project. `migrations/20261003212719_init_pa
 | JWKS URL | root `.env` `SUPABASE_JWKS_URL` (`<url>/auth/v1/.well-known/jwks.json`) | no |
 | **Service-role key** | root `.env` `SUPABASE_SERVICE_ROLE_KEY`, backend only | **yes, never in the frontend or git** |
 
-The project signs tokens with an asymmetric key (ES256), so the backend verifies logins against the JWKS URL (issue #2).
+The project signs tokens with an asymmetric key (ES256), so the backend verifies logins against the JWKS URL (issue #40 for the login side).
 
 ## Still to do in the dashboard
 - Authentication, Providers: enable email magic link and/or Google.
