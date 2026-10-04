@@ -188,12 +188,12 @@ async def post_frame(
     plan: PlannerFn = Depends(get_planner),
     kf_store: KeyframeStore = Depends(get_keyframes),
 ) -> FrameResponse:
-    return await analyse_frame(session_id, background, t_ms, frame, user, repo, extract, plan)
+    return await analyse_frame(session_id, background, t_ms, frame, user, repo, extract, plan, kf_store=kf_store)
 
 
 async def analyse_frame(
     session_id: str, background: BackgroundTasks, t_ms: int, frame: UploadFile, user: AuthUser, repo: SessionRepo,
-    extract: VisionFn, plan: PlannerFn, *, capture: bool = True,
+    extract: VisionFn, plan: PlannerFn, *, capture: bool = True, kf_store: KeyframeStore | None = None,
 ) -> FrameResponse:
     """The vision pipeline for one frame. `capture=False` (learn mode) skips question planning and step grouping."""
     if session_id in _off_record:
@@ -251,7 +251,7 @@ async def analyse_frame(
                 continue  # ignore a malformed event, keep the rest
 
         rows = [e.model_dump(exclude={"id"}) for e in events]
-        kf_path = None if redactions else await _keep_keyframe(user, repo, kf_store, session_id, t_ms, data, rows)
+        kf_path = None if (redactions or kf_store is None) else await _keep_keyframe(user, repo, kf_store, session_id, t_ms, data, rows)
         if kf_path:
             for row in rows:
                 row["keyframe_path"] = kf_path
