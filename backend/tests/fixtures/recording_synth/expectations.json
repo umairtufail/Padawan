@@ -1,0 +1,81 @@
+[
+ {
+  "name": "cursor moved only",
+  "t_ms_range": [
+   1000,
+   1000
+  ],
+  "must_mention": [],
+  "max_events": 0
+ },
+ {
+  "name": "typing in notes",
+  "t_ms_range": [
+   2000,
+   3000
+  ],
+  "must_mention": [
+   "pump"
+  ]
+ },
+ {
+  "name": "cost center 4711 -> 0400",
+  "t_ms_range": [
+   4000,
+   4000
+  ],
+  "must_mention": [
+   "4711",
+   "0400"
+  ]
+ },
+ {
+  "name": "status Open -> Hold",
+  "t_ms_range": [
+   5000,
+   5000
+  ],
+  "must_mention": [
+   "hold"
+  ]
+ },
+ {
+  "name": "save dialog with empty asset no.",
+  "t_ms_range": [
+   6000,
+   6000
+  ],
+  "must_mention": [
+   "asset"
+  ]
+ },
+ {
+  "name": "dialog unchanged",
+  "t_ms_range": [
+   7000,
+   7000
+  ],
+  "must_mention": [],
+  "max_events": 0
+ },
+ {
+  "name": "saved banner",
+  "t_ms_range": [
+   8000,
+   8000
+  ],
+  "must_mention": [
+   "5100002291"
+  ]
+ },
+ {
+  "name": "list with two similar rows, 4417 selected",
+  "t_ms_range": [
+   9000,
+   9000
+  ],
+  "must_mention": [
+   "4417"
+  ]
+ }
+]
