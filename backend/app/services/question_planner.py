@@ -14,6 +14,7 @@ from ..config import settings
 from ..prompts import load_prompt
 from ..schemas import QuestionCandidate
 from . import llm
+from .gaps import similar
 
 log = logging.getLogger("padawan.planner")
 
@@ -61,7 +62,15 @@ def parse_candidates(data: dict | None, valid_event_ids: set[int], asked: list[d
             QuestionCandidate(id=str(uuid.uuid4()), type=qtype, text=text, anchor_event_id=anchor, priority=priority)
         )
     out.sort(key=lambda c: c.priority, reverse=True)
-    return out[:MAX_CANDIDATES]
+    # Same (type, anchor) or a near-identical wording within one batch: keep the best only.
+    final: list[QuestionCandidate] = []
+    for c in out:
+        if any((f.type, f.anchor_event_id) == (c.type, c.anchor_event_id) or similar(f.text, c.text) for f in final):
+            continue
+        if any(similar(q.get("text", ""), c.text) for q in asked):
+            continue
+        final.append(c)
+    return final[:MAX_CANDIDATES]
 
 
 async def plan_questions(
