@@ -64,7 +64,7 @@ export default function YodaVoicePanel(p: Props) {
           </div>
           <p className="mt-2 text-sm text-muted">
             {!connected && "Yoda stays silent while you work. Connect him, and he asks one short question at a natural pause."}
-            {connected && !p.micOn && !p.awaitingAnswer && "Your microphone is muted to Yoda. It opens when he asks, so you can answer."}
+            {connected && !p.micOn && !p.awaitingAnswer && "Your microphone is muted to Yoda. Press unmute to talk to him."}
             {connected && p.micOn && !p.awaitingAnswer && "Your microphone is on: Yoda hears you."}
             {connected && p.awaitingAnswer && "Yoda asked. Answer in your own words, he is listening."}
           </p>
