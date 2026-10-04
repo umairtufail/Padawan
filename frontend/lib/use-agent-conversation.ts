@@ -33,26 +33,13 @@ type Options = {
 /** How long Yoda waits for an answer before the mic goes back to muted. */
 export const ANSWER_WAIT_MS = 30_000;
 const MAX_CAPTIONS = 60;
-type AgentMode = "speaking" | "listening";
 
-/** Every conversation starts muted; a completed Yoda turn opens the first answer window. */
-export function micStartsOpen(mode: VoiceMode): boolean {
-  switch (mode) {
-    case "capture":
-    case "debrief":
-    case "tutor":
-      return false;
-  }
-}
-
-/** The microphone is never open while Yoda speaks or before Yoda has completed a question. */
-export function micShouldBeOpen(
-  mode: VoiceMode,
-  agentMode: AgentMode | null,
-  agentTurnComplete: boolean,
-  awaitingCaptureAnswer: boolean,
-): boolean {
-  if (agentMode !== "listening" || !agentTurnComplete) return false;
+/**
+ * Debrief and tutor are open-mic conversations. Capture is app-driven: Yoda hears the Master for the whole answer
+ * window of a question (until log_answer or the timeout), so narration while working never reaches him.
+ * Pauses, final transcripts and Yoda speaking do not close the mic; echo is left to the browser's echo cancellation.
+ */
+export function micShouldBeOpen(mode: VoiceMode, awaitingCaptureAnswer: boolean): boolean {
   return mode === "capture" ? awaitingCaptureAnswer : true;
 }
 
@@ -86,9 +73,8 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
   const seq = useRef(0);
   const timers = useRef(new Set<number>());
   const answerTimer = useRef<number | null>(null);
-  const agentModeRef = useRef<AgentMode | null>(null);
-  const agentTurnCompleteRef = useRef(false);
   const awaitingAnswerRef = useRef(false);
+  const userMutedRef = useRef(false);
   const alive = useRef(true);
   const mockAnswerIdx = useRef(0);
 
@@ -121,16 +107,17 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
     conv.current?.setMicMuted(!on);
   }, []);
 
-  const syncMicToTurn = useCallback(() => {
-    applyMic(micShouldBeOpen(mode, agentModeRef.current, agentTurnCompleteRef.current, awaitingAnswerRef.current));
+  const syncMic = useCallback(() => {
+    applyMic(!userMutedRef.current && micShouldBeOpen(mode, awaitingAnswerRef.current));
   }, [applyMic, mode]);
 
+  /** The person's mute button. It always wins: muted stays muted until they unmute. */
   const setMic = useCallback(
     (on: boolean) => {
-      // A manual click can close the mic, but cannot open it over Yoda or outside an answer window.
-      applyMic(on && micShouldBeOpen(mode, agentModeRef.current, agentTurnCompleteRef.current, awaitingAnswerRef.current));
+      userMutedRef.current = !on;
+      applyMic(on);
     },
-    [applyMic, mode],
+    [applyMic],
   );
 
   const closeAnswerWindow = useCallback(() => {
@@ -141,10 +128,9 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
     }
     setAwaitingAnswer(false);
     awaitingAnswerRef.current = false;
-    agentTurnCompleteRef.current = false;
-    applyMic(false);
+    syncMic();
     closedRef.current?.();
-  }, [applyMic]);
+  }, [syncMic]);
 
   /** Runs a client tool call (from ElevenLabs or from the mock). */
   const runTool = useCallback(
@@ -183,9 +169,8 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
     answerTimer.current = null;
     const c = conv.current;
     conv.current = null;
-    agentModeRef.current = null;
-    agentTurnCompleteRef.current = false;
     awaitingAnswerRef.current = false;
+    userMutedRef.current = false;
     setAgentSpeaking(false);
     setAwaitingAnswer(false);
     setMicOnState(false);
@@ -215,7 +200,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       }
       const { Conversation } = await import("@elevenlabs/client");
       // @elevenlabs/client's web input requests echo cancellation, noise suppression, automatic gain control,
-      // mono audio and voice isolation. Turn gating below adds protection against Yoda hearing his own output.
+      // mono audio and voice isolation; the agent also filters background voices (setup_voice_agents.py).
       const c = await Conversation.startSession({
         signedUrl: vs.signed_url,
         dynamicVariables: vs.dynamic_variables,
@@ -228,22 +213,10 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
           finish_learning: (a: Record<string, unknown>) => runTool("finish_learning", a),
         },
         onMessage: ({ role, message }) => {
-          if (role === "agent") {
-            agentTurnCompleteRef.current = true;
-            addCaption("yoda", cleanCaption(message));
-          } else {
-            // A final user transcript closes this answer window immediately. Yoda's next completed turn
-            // will open a new one if the conversation continues.
-            agentTurnCompleteRef.current = false;
-            applyMic(false);
-            if (!isCommand(message)) addCaption("expert", message);
-          }
+          if (role === "agent") addCaption("yoda", cleanCaption(message));
+          else if (!isCommand(message)) addCaption("expert", message);
         },
-        onModeChange: ({ mode: m }) => {
-          agentModeRef.current = m;
-          setAgentSpeaking(m === "speaking");
-          syncMicToTurn();
-        },
+        onModeChange: ({ mode: m }) => setAgentSpeaking(m === "speaking"),
         onStatusChange: ({ status: s }) => {
           if (s === "disconnected") {
             conv.current = null;
@@ -261,18 +234,13 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
         return;
       }
       conv.current = c;
-      // Start every mode muted. A completed Yoda turn opens the mic; Yoda speaking or a final user transcript
-      // closes it again. Capture additionally requires an app-driven question to be waiting.
-      const open = micStartsOpen(mode);
-      c.setMicMuted(!open);
-      setMicOnState(open);
-      syncMicToTurn();
+      syncMic();
       setStatus("connected");
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Could not start the conversation with Yoda.");
     }
-  }, [status, sessionId, mode, addCaption, runTool, applyMic, syncMicToTurn]);
+  }, [status, sessionId, mode, addCaption, runTool, syncMic]);
 
   /** Short screen context. Does not make Yoda speak. */
   const sendContext = useCallback((text: string) => {
@@ -288,8 +256,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       if (status !== "connected") return false;
       setAwaitingAnswer(true);
       awaitingAnswerRef.current = true;
-      agentTurnCompleteRef.current = false;
-      applyMic(false);
+      syncMic();
       if (answerTimer.current !== null) window.clearTimeout(answerTimer.current);
       answerTimer.current = later(closeAnswerWindow, ANSWER_WAIT_MS);
 
@@ -311,7 +278,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       }
       return true;
     },
-    [status, applyMic, later, closeAnswerWindow, addCaption, runTool],
+    [status, syncMic, later, closeAnswerWindow, addCaption, runTool],
   );
 
   /**
@@ -324,8 +291,6 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
   const sendMessage = useCallback(
     (command: string, mockSpeech?: string) => {
       if (status !== "connected") return false;
-      agentTurnCompleteRef.current = false;
-      applyMic(false);
       if (MOCK) {
         if (mockSpeech) {
           later(() => {
@@ -339,7 +304,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       conv.current?.sendUserMessage(command);
       return true;
     },
-    [status, later, addCaption, applyMic],
+    [status, later, addCaption],
   );
 
   /**
@@ -350,8 +315,6 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
   const tell = useCallback(
     (command: string, mockSay?: { text: string; tool?: { name: string; args: Record<string, unknown>; afterMs?: number } }) => {
       if (status !== "connected") return false;
-      agentTurnCompleteRef.current = false;
-      applyMic(false);
       if (!MOCK) {
         conv.current?.sendUserMessage(command);
         return true;
@@ -367,7 +330,7 @@ export function useAgentConversation({ sessionId, mode, tools, onAnswerWindowClo
       if (tool) later(() => void runTool(tool.name, tool.args), 300 + speakMs + (tool.afterMs ?? 1200));
       return true;
     },
-    [status, later, addCaption, runTool, applyMic],
+    [status, later, addCaption, runTool],
   );
 
   useEffect(() => {
