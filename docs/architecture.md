@@ -17,7 +17,7 @@ Last checked against the code: 2026-10-04.
 | Vision service + prompts | Built | DeepSeek V4.1 Flash on Nebius, about 1 to 2 s per frame; 25 of 25 difference checks on our mock ERP frames (not yet tested on real screens) |
 | Storage layer | Built | in memory (dev, admin), or Supabase called as the user (supabase mode); the deployed backend uses memory |
 | Supabase database | Built | 8 tables with row-level security, sign-up profile trigger, owner write policies |
-| Supabase Auth login | Not built | providers not enabled, no login UI yet (#40) |
+| Supabase Auth login | Built | email and password, tested live (`docs/supabase-login.md`); not switched on in the deployments yet, Google not set up (#40) |
 | Supabase Storage + Realtime | Not built | bucket and publication exist but nothing uses them |
 | Yoda voice (ElevenLabs agents, voice UI, pause controller, voice sessions) | Not built | tickets #25, #26, #28 |
 | Question planner | Not built | prompt written (`backend/app/prompts/question_planner.system.md`), no code (#27) |
@@ -42,7 +42,7 @@ flowchart LR
         F7["Holocron / Work Map view"]:::todo
         F8["Jedi Archives marketplace"]:::todo
         F9["Learn session"]:::todo
-        F10["Supabase login UI"]:::todo
+        F10["Supabase login UI"]:::built
         F11["Yoda voice UI"]:::todo
     end
     subgraph BE["Backend: FastAPI on FastAPI Cloud"]
@@ -62,7 +62,7 @@ flowchart LR
     end
     subgraph EX["External services"]
         direction TB
-        X0["Supabase Auth"]:::todo
+        X0["Supabase Auth"]:::built
         X2["Supabase Postgres + RLS"]:::built
         X4["Nebius: DeepSeek V4.1 Flash"]:::built
         X6["Supabase Storage + Realtime"]:::todo
