@@ -165,7 +165,13 @@ export default function ScreenCapture({ onFrame, initialStream = null, embedded 
       setDiff(null);
       setWaiting(false);
       setElapsed(0);
-      setSourceName(videoTrack?.label || "Shared screen");
+      // Chrome labels a shared tab with an internal id ("web-contents-media-stream://..."): show something readable.
+      const rawLabel = videoTrack?.label ?? "";
+      const readable = rawLabel && !rawLabel.startsWith("web-contents-media-stream") ? rawLabel : "";
+      setSourceName(
+        readable ||
+          (displaySurface === "browser" ? "A browser tab" : displaySurface === "window" ? "An app window" : displaySurface === "monitor" ? "Your screen" : "Shared screen"),
+      );
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
