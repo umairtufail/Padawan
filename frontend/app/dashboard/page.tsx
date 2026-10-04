@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   API_URL, MOCK, ApiError, health, listSessions, type SessionSummary,
 } from "../../lib/api";
-import { Chip, ErrorBox, Label } from "../../components/ui";
+import { btnGhost, Chip, ErrorBox, Label } from "../../components/ui";
 import StartTeaching from "../../components/start-teaching";
 import YodaFigure from "../../components/yoda-figure";
 
@@ -65,15 +65,15 @@ export default function Overview() {
           <StartTeaching className="mt-6 self-start" />
         </article>
 
-        <article className="flex flex-col rounded-2xl border border-line bg-surface/50 p-7 opacity-80">
+        <article className="flex flex-col rounded-2xl border border-line bg-surface/50 p-7">
           <Label>For the Padawan</Label>
           <h2 className="mt-4 font-heading text-3xl font-black text-muted">Learn from Yoda</h2>
           <p className="mt-2 flex-1 leading-relaxed text-muted">
             Yoda tutors you through a Holocron and stops you before you break a guardrail.
           </p>
-          <button type="button" disabled className="mt-6 cursor-not-allowed self-start rounded-lg border border-line px-5 py-2.5 text-sm font-semibold text-muted">
-            Coming soon
-          </button>
+          <Link href="/dashboard/skills" className={`${btnGhost} mt-6 self-start`}>
+            Pick a Holocron
+          </Link>
         </article>
       </section>
 

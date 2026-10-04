@@ -15,7 +15,7 @@ from app.routers import sessions as sessions_router
 from app.routers.learn import get_checker, get_judge, get_summarizer
 from app.routers.sessions import get_vision
 from app.routers.voice import get_signed_url_fn
-from app.schemas import SkillJson
+from app.schemas import Reason, ScreenMoment, SkillJson, SkillStep
 from app.services import guardrail_checker as gc
 from app.services import learn
 from app.services.synthesizer import render_skill_md
@@ -397,3 +397,13 @@ async def test_tutor_variables_carry_the_holocron():
     assert v["expert"] == "Sabine" and v["skill_md"].startswith("---") and "Code the invoice" in v["skill_steps"]
     assert "g1 (step 1, stop_and_ask): No asset number" in v["skill_guardrails"] and "g3 (whole task" in v["skill_guardrails"]
     assert v["current_step"] == "1. Code the invoice" and v["current_step_idx"] == "1"
+
+
+def test_why_has_no_doubled_full_stops():
+    step = SkillStep(
+        idx=1, title="t", screen_moment=ScreenMoment(t_ms=0, description="d"),
+        reason=Reason(text="It is long-lived.", quote="q"),
+    )
+    text = learn._why(step, {"started_ms": 0, "interventions": 1}, "Above 5,000 EUR approve first.")
+    assert ".." not in text and ".;" not in text
+    assert text.endswith("It is long-lived.")

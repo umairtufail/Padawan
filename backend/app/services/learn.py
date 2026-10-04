@@ -129,7 +129,7 @@ def _why(step: SkillStep, row: dict | None, rule: str | None) -> str:
         bits.append(f"Yoda warned you {row['warnings']} time(s)" + (f" on: {rule}" if rule else ""))
     if step.reason and bits:
         bits.append(f"the Master's reason: {step.reason.text}")
-    text = "; ".join(bits)
+    text = "; ".join(b.rstrip(".") for b in bits)
     return text[:1].upper() + text[1:] + "." if bits else "Worth another look."
 
 
