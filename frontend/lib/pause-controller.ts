@@ -39,7 +39,7 @@ export type PauseConfig = {
 export const DEFAULT_PAUSE_CONFIG: PauseConfig = {
   idleMs: 3000,
   expertSilentMs: 1500,
-  minGapMs: 25_000,
+  minGapMs: 30_000,
   maxPerWindow: 12,
   windowMs: 600_000,
   maxAgeMs: 180_000,

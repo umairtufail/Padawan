@@ -34,6 +34,9 @@ type Inputs = {
 const TICK_MS = 500;
 /** With nothing queued, a curious Yoda asks his own question after the screen has been quiet this long. */
 const CURIOUS_IDLE_MS = 5000;
+/** After the first question, a curious one is only allowed after this long and after this many new events: it must matter. */
+const CURIOUS_GAP_MS = 90_000;
+const CURIOUS_MIN_EVENTS = 3;
 const MAX_TRACE = 40;
 
 /**
@@ -51,6 +54,8 @@ export function usePauseController(inputs: Inputs) {
   const [checks, setChecks] = useState<Check[]>([]);
   const [asked, setAsked] = useState(0);
   const curious = useRef(0);
+  const eventsSince = useRef(0);
+  const lastAskTs = useRef<number | null>(null);
 
   useEffect(() => {
     latest.current = inputs;
@@ -64,6 +69,7 @@ export function usePauseController(inputs: Inputs) {
   const onFrameResponse = useCallback(
     (res: FrameResponse) => {
       const now = Date.now();
+      eventsSince.current += res.events.length;
       for (const q of questionsForResponse(res)) {
         if (controller.enqueue({ ...q }, now)) log("queued", `Queued (${q.source}): ${q.question}`);
       }
@@ -94,10 +100,13 @@ export function usePauseController(inputs: Inputs) {
       });
       setChecks(decision.checks);
       setPending(controller.pending(now));
-      // Interactive apprentice: when only "no question waiting" blocks him, ask his own curious question.
+      // Interactive apprentice, but only when it matters: one opening question after the first changes, then a curious
+      // one only after a long quiet stretch with several new events. Real changes (salient events) queue their own.
       if (decision.kind === "wait" && decision.blockers.length === 1 && decision.blockers[0] === "candidate") {
         const idle = s.lastFrameChangeAt === null ? 0 : now - s.lastFrameChangeAt;
-        if (idle >= CURIOUS_IDLE_MS) {
+        const first = lastAskTs.current === null && eventsSince.current >= 1;
+        const later = lastAskTs.current !== null && now - lastAskTs.current >= CURIOUS_GAP_MS && eventsSince.current >= CURIOUS_MIN_EVENTS;
+        if (idle >= CURIOUS_IDLE_MS && (first || later)) {
           const q = curiosityQuestion(curious.current++);
           controller.enqueue({ id: `curious-${now}`, question: q, priority: -2, source: "stub", type: "reason", anchorEventId: null }, now);
           log("queued", `Queued (curious): ${q}`);
@@ -108,6 +117,8 @@ export function usePauseController(inputs: Inputs) {
         const c = decision.candidate;
         if (s.ask(c.question)) {
           controller.recordAsk(c, now);
+          lastAskTs.current = now;
+          eventsSince.current = 0;
           lastSignature.current = "";
           setAsked((n) => n + 1);
           log("ask", `Asked now: ${c.question}`, decision.checks);
@@ -140,6 +151,8 @@ export function usePauseController(inputs: Inputs) {
         next ?? { id: `manual-${now}`, question: fallback, priority: 0, source: "manual", queuedAt: now };
       if (!latest.current.ask(candidate.question)) return false;
       controller.recordAsk(candidate, now, true);
+      lastAskTs.current = now;
+      eventsSince.current = 0;
       setAsked((n) => n + 1);
       log("manual", `Asked on request: ${candidate.question}`);
       try {

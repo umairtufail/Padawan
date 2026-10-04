@@ -82,16 +82,16 @@ describe("PauseController.evaluate", () => {
 });
 
 describe("question budget", () => {
-  it("keeps 25 s between two questions", () => {
+  it("keeps 30 s between two questions", () => {
     const c = new PauseController();
     c.enqueue(q("a"), T0);
     c.enqueue(q("b"), T0);
     const first = c.evaluate(NOW, calm());
     expect(first.kind).toBe("ask");
     if (first.kind === "ask") c.recordAsk(first.candidate, NOW);
-    const soon = c.evaluate(NOW + 24_999, calm({ lastFrameChangeAt: T0 }));
+    const soon = c.evaluate(NOW + 29_999, calm({ lastFrameChangeAt: T0 }));
     expect(soon.kind === "wait" && soon.blockers).toEqual(["gap"]);
-    expect(c.evaluate(NOW + 25_000, calm()).kind).toBe("ask");
+    expect(c.evaluate(NOW + 30_000, calm()).kind).toBe("ask");
   });
 
   it("allows at most 12 questions per 10 minutes, then frees a slot", () => {
