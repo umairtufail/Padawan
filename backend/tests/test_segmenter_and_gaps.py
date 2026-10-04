@@ -143,3 +143,42 @@ async def test_answered_questions_and_speech_close_gaps():
     qs = await store.list_questions(DEV, sid)
     found = gaps.find_gaps(steps, events, [], qs, [{"id": "c1", "text": "Why 0400?", "anchor_event_id": 2, "priority": 0.9}])
     assert "unasked_question" not in {g.type for g in found}
+
+
+def test_similar_catches_near_duplicates_but_not_different_questions():
+    assert gaps.similar("Is there a limit where you would stop and ask someone?", "Is there a threshold at which you stop and ask someone?")
+    assert gaps.similar("Why 0400?", "why 0400")
+    assert not gaps.similar("Why this cost center?", "What does '4711' mean here?")
+
+
+def _cand(i, t, ty, a, p):
+    return {"id": i, "text": t, "type": ty, "anchor_event_id": a, "priority": p}
+
+
+def test_dedupe_candidates_by_type_anchor_and_text():
+    known = [_cand("k", "Is there a limit where you would stop?", "limit", 1, 0.5)]
+    new = [
+        _cand("a", "Is there a limit at which you would stop?", "guardrail", 2, 0.9),  # near-duplicate of known
+        _cand("b", "Why 0400?", "reason", 3, 0.8),
+        _cand("c", "Why did you pick 0400 here?", "reason", 3, 0.6),  # same type and anchor as b
+    ]
+    assert [x["id"] for x in gaps.dedupe_candidates(new, known)] == ["b"]
+    gaps.reset_state()
+    gaps.record_candidates("s", [known[0]])
+    gaps.record_candidates("s", new)
+    assert [x["id"] for x in gaps.get_candidates("s")] == ["k", "b"]
+    gaps.reset_state()
+
+
+def test_find_gaps_drops_near_duplicates_and_caps():
+    events = [ev(i, i * 1000, f"Cost center changed {i}", "change", **{"from": "1", "to": "2"}) for i in range(1, 13)]
+    steps = [{"idx": i, "title": f"Step {i}", "event_ids": [i], "t_start_ms": i * 1000, "t_end_ms": i * 1000} for i in range(1, 13)]
+    cands = [
+        _cand("x1", "Is there a limit where you would stop and ask someone?", "guardrail", 1, 0.9),
+        _cand("x2", "Is there a threshold where you stop and ask someone?", "limit", 2, 0.9),
+    ]
+    found = gaps.find_gaps(steps, events, [], [], cands)
+    assert len(found) <= gaps.MAX_GAPS
+    assert len({(g.type, g.anchor_event_id) for g in found}) == len(found)
+    limit_like = [g for g in found if "limit" in g.text.lower() or "threshold" in g.text.lower()]
+    assert len(limit_like) == 1  # twelve steps plus two candidates ask the same thing: only one survives
