@@ -2,33 +2,15 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, getSession, sendFrame, type PadawanEvent, type SessionDetail } from "../../../../lib/api";
-import type { CapturedFramePayload } from "../../../../lib/frame-delivery";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError, getSession, type PadawanEvent, type SessionDetail } from "../../../../lib/api";
+import { peekStream, releaseStream } from "../../../../lib/capture-handoff";
+import { useFrameBuffer } from "../../../../lib/use-frame-buffer";
 import ScreenCapture from "../../../screen-capture";
+import FrameTimeline from "../../../../components/frame-timeline";
 import { Chip, ErrorBox, Label } from "../../../../components/ui";
 
 const POLL_MS = 3000;
-const MAX_WIDTH = 1024;
-const JPEG_QUALITY = 0.6;
-
-/** Downscale to ~1024 px wide JPEG q0.6 so frames stay around 80-150 KB (backend limit is 4 MB). */
-async function downscale(blob: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, MAX_WIDTH / bitmap.width);
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not prepare a canvas to downscale the frame.");
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode the frame."))), "image/jpeg", JPEG_QUALITY),
-  );
-}
 
 function EventCard({ ev }: { ev: PadawanEvent }) {
   const entities = Object.entries(ev.entities ?? {});
@@ -61,13 +43,8 @@ export default function TeachSessionPage() {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [error, setError] = useState("");
   const [notFound, setNotFound] = useState(false);
-  const [sent, setSent] = useState(0);
-  const [skipped, setSkipped] = useState(0);
-  const [lastLatency, setLastLatency] = useState<number | null>(null);
-  const [uploadError, setUploadError] = useState("");
-
-  const inFlight = useRef(false);
-  const startedAt = useRef<number | null>(null);
+  // The live screen share started by the "Start" button on the previous page, if we arrived from there.
+  const [initialStream] = useState(() => peekStream(id));
 
   const refresh = useCallback(async () => {
     try {
@@ -80,6 +57,8 @@ export default function TeachSessionPage() {
     }
   }, [id]);
 
+  const { items, push, counts, lastLatency } = useFrameBuffer(id, { onSettled: () => void refresh() });
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
     void refresh();
@@ -87,32 +66,7 @@ export default function TeachSessionPage() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const onFrame = useCallback(
-    async (payload: CapturedFramePayload) => {
-      // One request in flight: drop new frames while the previous one is analysed.
-      if (inFlight.current) return;
-      inFlight.current = true;
-      try {
-        const now = Date.now();
-        if (startedAt.current === null) startedAt.current = now;
-        const jpeg = await downscale(payload.blob);
-        const res = await sendFrame(id, now - startedAt.current, jpeg);
-        setSent((n) => n + 1);
-        setLastLatency(res.latency_ms);
-        // A skipped frame is normal (backend busy, slow model, ...): just carry on.
-        if (res.skipped) setSkipped((n) => n + 1);
-        setUploadError("");
-        void refresh();
-      } catch (err) {
-        if (!(err instanceof ApiError && err.status === 401)) {
-          setUploadError(err instanceof Error ? err.message : "Could not send the frame.");
-        }
-      } finally {
-        inFlight.current = false;
-      }
-    },
-    [id, refresh],
-  );
+  useEffect(() => () => releaseStream(id), [id]);
 
   if (notFound) {
     return (
@@ -135,32 +89,35 @@ export default function TeachSessionPage() {
 
       {error && <ErrorBox>{error}</ErrorBox>}
 
+      <ScreenCapture
+        embedded
+        showCaptures={false}
+        initialStream={initialStream}
+        onFrame={push}
+        stats={
+          <>
+            <Chip tone="info">{counts.captured} captured</Chip>
+            <Chip tone="jade">{counts.analyzed} analysed</Chip>
+            {counts.queued > 0 && <Chip tone="gold">{counts.queued} in buffer</Chip>}
+            {counts.skipped + counts.dropped + counts.failed > 0 && <Chip tone="muted">{counts.skipped + counts.dropped + counts.failed} not analysed</Chip>}
+            {lastLatency !== null && <Chip tone="muted">{lastLatency} ms</Chip>}
+          </>
+        }
+      />
+
       <section aria-labelledby="screen" className="rounded-2xl border border-jade/30 bg-surface/90 p-5">
         <Label className="!text-jade">What Yoda sees now</Label>
         <h2 id="screen" className="sr-only">Latest screen summary</h2>
         <p className="mt-2 text-lg text-fg">
-          {session ? session.last_screen_summary || "Nothing yet. Share your screen to start teaching." : "…"}
+          {session ? session.last_screen_summary || "Nothing yet. The first look arrives a few seconds after recording starts." : "…"}
         </p>
       </section>
 
-      <section aria-labelledby="share">
-        <h2 id="share" className="font-heading text-2xl font-black text-gold">Share your screen</h2>
-        <p className="mt-1 text-sm text-muted">
-          Frames are sent straight from your browser to the backend, only when the screen changes.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2" role="status">
-          <Chip tone="info">frames sent: {sent}</Chip>
-          <Chip tone="info">skipped by backend: {skipped}</Chip>
-          {lastLatency !== null && <Chip tone="jade">last analysis: {lastLatency} ms</Chip>}
-        </div>
-        {uploadError && <div className="mt-3"><ErrorBox>{uploadError}</ErrorBox></div>}
-        <div className="mt-4 overflow-hidden rounded-2xl">
-          <ScreenCapture embedded onFrame={onFrame} />
-        </div>
-      </section>
+      <FrameTimeline items={items} />
 
       <section aria-labelledby="events">
-        <h2 id="events" className="font-heading text-2xl font-black text-gold">Events</h2>
+        <h2 id="events" className="font-heading text-2xl font-black text-gold">All events</h2>
+        <p className="mt-1 text-sm text-muted">Everything Yoda reported in this session, newest first.</p>
         <div className="mt-4">
           {session && events.length === 0 && (
             <p className="rounded-xl border border-dashed border-line p-6 text-muted">No events yet. Yoda is waiting for the screen to change.</p>

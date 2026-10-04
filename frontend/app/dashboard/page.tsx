@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
-  API_URL, MOCK, ApiError, createTeachSession, health, listSessions, type SessionSummary,
+  API_URL, MOCK, ApiError, health, listSessions, type SessionSummary,
 } from "../../lib/api";
-import { btnPrimary, Chip, ErrorBox, Label } from "../../components/ui";
+import { Chip, ErrorBox, Label } from "../../components/ui";
+import StartTeaching from "../../components/start-teaching";
 import YodaFigure from "../../components/yoda-figure";
 
 type Backend = "checking" | "up" | "down";
@@ -17,12 +17,9 @@ function formatDate(iso: string) {
 }
 
 export default function Overview() {
-  const router = useRouter();
   const [backend, setBackend] = useState<Backend>("checking");
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -42,20 +39,6 @@ export default function Overview() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
     void load();
   }, [load]);
-
-  async function startTeaching() {
-    setCreating(true);
-    setCreateError("");
-    try {
-      const s = await createTeachSession("New task");
-      router.push(`/dashboard/teach/${s.session_id}`);
-    } catch (err) {
-      if (!(err instanceof ApiError && err.status === 401)) {
-        setCreateError(err instanceof Error ? err.message : "Could not create a session.");
-      }
-      setCreating(false);
-    }
-  }
 
   const statusText = backend === "checking" ? "Checking backend…" : backend === "up" ? "Backend reachable" : "Backend unreachable";
   const statusTone = backend === "up" ? "jade" : backend === "down" ? "danger" : "info";
@@ -77,12 +60,9 @@ export default function Overview() {
           </div>
           <h2 className="mt-4 font-heading text-3xl font-black text-gold">Teach Yoda</h2>
           <p className="mt-2 flex-1 leading-relaxed text-muted">
-            Share your screen while you work. Yoda watches, notes what changes and learns the why behind each step.
+            Press start, pick the screen to share, and Yoda begins watching right away. He notes what changes and learns the why behind each step.
           </p>
-          {createError && <div className="mt-4"><ErrorBox>{createError}</ErrorBox></div>}
-          <button type="button" onClick={startTeaching} disabled={creating} className={`${btnPrimary} mt-6 self-start`}>
-            {creating ? "Creating session…" : "Start teaching"}
-          </button>
+          <StartTeaching className="mt-6 self-start" />
         </article>
 
         <article className="flex flex-col rounded-2xl border border-line bg-surface/50 p-7 opacity-80">

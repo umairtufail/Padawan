@@ -10,12 +10,13 @@ export function Label({ children, className = "" }: { children: ReactNode; class
   return <span className={`font-mono text-xs uppercase tracking-widest text-muted ${className}`}>{children}</span>;
 }
 
-export function Chip({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "jade" | "gold" | "danger" }) {
+export function Chip({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "jade" | "gold" | "danger" | "muted" }) {
   const tones = {
     info: "border-info/40 text-info",
     jade: "border-jade/40 text-jade",
     gold: "border-gold/40 text-gold",
     danger: "border-danger/40 text-danger",
+    muted: "border-line text-muted",
   };
   return (
     <span className={`inline-block rounded-full border px-2 py-0.5 font-mono text-xs ${tones[tone]}`}>{children}</span>

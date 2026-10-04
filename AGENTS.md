@@ -17,7 +17,7 @@ cd backend && uv sync && uv run fastapi dev app/main.py        # API on :8000
 cd backend && uv run pytest                                     # must pass before every PR
 cd backend && uv run ruff check .                               # lint
 cd frontend && npm install && npm run dev                       # app on :3000
-cd frontend && npm run lint && npm run build                    # must pass before every PR
+cd frontend && npm run lint && npm test && npm run build        # must pass before every PR
 ```
 Backend dependencies are managed with **uv** (`uv add <pkg>`), never `pip install` or a `requirements.txt`.
 

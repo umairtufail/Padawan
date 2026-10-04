@@ -1,33 +1,46 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ApiError, createTeachSession } from "../../../lib/api";
-import { btnGhost, ErrorBox } from "../../../components/ui";
+import { useState } from "react";
+import StartTeaching from "../../../components/start-teaching";
+import YodaFigure from "../../../components/yoda-figure";
+import { Label } from "../../../components/ui";
 
-/** /dashboard/teach: creates a fresh session and jumps to it. */
+/** /dashboard/teach: name the task, press start, pick a screen. Recording begins on the next page. */
 export default function TeachIndex() {
-  const router = useRouter();
-  const [error, setError] = useState("");
-  const started = useRef(false);
+  const [title, setTitle] = useState("");
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    createTeachSession("New task")
-      .then((s) => router.replace(`/dashboard/teach/${s.session_id}`))
-      .catch((err) => {
-        if (!(err instanceof ApiError && err.status === 401)) setError(err instanceof Error ? err.message : "Could not create a session.");
-      });
-  }, [router]);
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="rounded-2xl border border-jade/30 bg-surface/90 p-8">
+        <div className="flex items-center gap-5">
+          <YodaFigure size={96} label="" />
+          <div>
+            <Label className="!text-jade">For the Master</Label>
+            <h1 className="mt-1 font-heading text-3xl font-black text-gold">Teach Yoda</h1>
+          </div>
+        </div>
 
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <ErrorBox>{error}</ErrorBox>
-        <a href="/dashboard" className={btnGhost}>Back to overview</a>
+        <p className="mt-5 leading-relaxed text-muted">
+          Do your job as usual. When you press start, your browser asks which screen to share, and Yoda starts watching
+          straight away: he notes every change that matters and, later, asks you why.
+        </p>
+
+        <label className="mt-6 block">
+          <Label>What are you about to do?</Label>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={120}
+            placeholder="e.g. Process supplier invoices"
+            className="mt-2 w-full rounded-lg border border-line bg-bg px-4 py-3 text-fg placeholder:text-muted/70 focus:border-jade focus:outline-none"
+          />
+        </label>
+
+        <StartTeaching title={title} label="Start recording" className="mt-6" />
+        <p className="mt-4 text-xs text-muted">
+          Only frames where the screen changes are sent, straight from your browser. Stop any time from the page or from your browser&apos;s sharing bar.
+        </p>
       </div>
-    );
-  }
-  return <p className="font-mono text-sm text-muted" role="status">Preparing a session…</p>;
+    </div>
+  );
 }
