@@ -97,6 +97,7 @@ Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token
 - **`skipped`** is `null` when the frame was analysed. Otherwise it is one of `busy`, `timeout`, `vision_error`, `parse_error`, `storage_error`, `off_the_record`. Just carry on with the next frame, nothing to retry and nothing to show the user.
 - **Redaction.** `screen_summary`, event `summary`, `entities` and `visible_text` are redacted on the backend before they are stored or returned: emails, IBANs (mod 97 checked), card numbers (Luhn checked), phone numbers and names after a cue (`Herr`, `Mr.`, `Customer:`) become `[EMAIL]`, `[IBAN]`, `[CARD]`, `[PHONE]`, `[NAME]`. Invoice numbers and cost centers stay. Not a guarantee: free-form names and addresses can slip through.
 - **Off the record.** `POST /v1/sessions/{id}/off-the-record` with `{"on": true}` (or `false`) returns `{"on": ...}`. While on, every frame returns `skipped: "off_the_record"`, is not analysed or stored, and is not sent to any model. The client should also stop capturing and mute the mic while it is on. The flag is held in server memory (lost on restart, per instance, not yet persisted); re-send it after a reconnect.
+- **Keyframes.** When a frame has a salient event, or its first event opens a new step, the backend keeps a small JPEG of it (at most 640 px wide, quality 60, no EXIF) in the private Supabase Storage bucket `keyframes` at `{user_id}/{session_id}/{t_ms}.jpg`, uploaded with the user's own token so storage row-level security makes it owner-only. The path is saved on the event (`keyframe_path`, visible in the events of `GET /v1/sessions/{id}`) and on the step. Nothing is kept when the session is off the record, when the redactor found personal data in the frame's text (the pixels may show it too), or when the upload fails or takes over 4 s. A storage failure never changes the frame response. Not every frame has a keyframe, and the frames response itself does not mention them.
 - Errors: `401` missing or invalid token (supabase mode), `404` unknown session or someone else's, `400` empty frame, `413` frame over 4 MB, `502` storage unavailable.
 
 ### Start a voice conversation with Yoda
@@ -142,6 +143,14 @@ Notes:
 - **Steps are built in the background** every 10 events or 20 s while frames arrive, and finally by `finish`. A step ends on: a different entity in focus (another invoice), a save or submit, a navigation, a long idle gap, or the expert saying "next" or "okay then".
 - **Not done yet**: transcript lines are **not redacted** (the PII ticket), `finish` does not return an ElevenLabs `signed_url`, and the off-record endpoint does not exist.
 
+Keyframes (the expert's screen at a salient moment or at the start of a step):
+
+| Method and path | Response |
+|---|---|
+| `GET /v1/sessions/{id}/keyframes/{t_ms}` | `{"t_ms": 5000, "url": "https://.../storage/v1/object/sign/keyframes/...?token=...", "expires_in": 300}`. `t_ms` must be the exact time of a frame that has a keyframe (an event's `keyframe_path` ends in `/{t_ms}.jpg`). `404` if the session is not yours or no keyframe was kept there, `502` if storage fails. The URL is short-lived (5 minutes): fetch it right before showing the image, never store it. |
+
+`steps` items (from `GET .../steps` and `finish`) also carry `keyframe_path` and a ready-signed `keyframe_url` (both `null` when the step has no keyframe or signing failed). The database change is migration `20261004120000_keyframes_storage_policies.sql`: a `steps_draft.keyframe_path` column, a 1 MB JPEG-only limit on the bucket, and storage policies so only the owner (first folder = their user id) can read, write or delete.
+
 ### Skills (Holocrons) and the Jedi Archives
 
 | Method and path | Response |
@@ -158,7 +167,7 @@ Notes:
  "created_at": "2026-10-03T18:00:00Z", "published_at": "2026-10-04T08:00:00Z"}
 ```
 
-The Holocron JSON (`skill`) is the contract from Notion page 03, with two differences you must handle: `reason` can be `null` (the expert never gave one; the backend never invents a reason), and each guardrail has `source` (`"expert"` or `"teachback"`; teach-back ones have an empty `quote` and `t_ms: null`). `keyframe_path` is `null` for now (keyframes are not stored yet). Guardrail ids are unique across the whole skill (`g1`, `g2`, ...). `predict_prompt` is set only on `judgment` steps.
+The Holocron JSON (`skill`) is the contract from Notion page 03, with two differences you must handle: `reason` can be `null` (the expert never gave one; the backend never invents a reason), and each guardrail has `source` (`"expert"` or `"teachback"`; teach-back ones have an empty `quote` and `t_ms: null`). `screen_moment.keyframe_path` is the storage path of the step's keyframe, or `null` when none was kept. `GET /v1/skills/{id}` (and publish) adds `screen_moment.keyframe_url`, a 5-minute signed URL, **only when the caller is the author**: keyframes are private to the expert, so a Padawan reading a published skill gets `null` there (sharing them with learners is not built). Guardrail ids are unique across the whole skill (`g1`, `g2`, ...). `predict_prompt` is set only on `judgment` steps.
 
 ```json
 {

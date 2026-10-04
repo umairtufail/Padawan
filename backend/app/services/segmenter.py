@@ -48,6 +48,17 @@ def is_decision(event: dict) -> bool:
     return event.get("kind") in DECISION_KINDS and (event.get("salient") or "from" in ents or "to" in ents)
 
 
+def starts_step(prev: dict, ev: dict) -> bool:
+    """Boundary rules that need only two neighbouring events (the spoken "next" rule needs the transcript)."""
+    f_prev, f_new = focus_of(prev), focus_of(ev)
+    return bool(
+        (f_prev and f_new and f_prev != f_new)
+        or is_save(prev)
+        or ev.get("kind") == "navigate" and prev.get("kind") != "navigate"
+        or ev["t_ms"] - prev["t_ms"] > IDLE_GAP_MS
+    )
+
+
 def _title(events: list[dict]) -> str:
     pick = next((e for e in events if is_decision(e)), None) or next((e for e in events if e.get("salient")), events[0])
     text = pick.get("summary", "").strip().rstrip(".")
@@ -55,7 +66,7 @@ def _title(events: list[dict]) -> str:
 
 
 def segment(events: list[dict], utterances: list[dict], questions: list[dict], *, closed: bool = False) -> list[dict]:
-    """Return steps_draft rows {idx, title, t_start_ms, t_end_ms, event_ids, question_ids, status}."""
+    """Return steps_draft rows {idx, title, t_start_ms, t_end_ms, event_ids, question_ids, status, keyframe_path}."""
     events = sorted(events, key=lambda e: (e.get("t_ms", 0), e.get("id", 0)))
     if not events:
         return []
@@ -66,15 +77,7 @@ def segment(events: list[dict], utterances: list[dict], questions: list[dict], *
         said_next = any(
             prev["t_ms"] < u["t_ms"] <= ev["t_ms"] and NEXT_RE.search(u.get("text", "")) for u in expert
         )
-        f_prev, f_new = focus_of(prev), focus_of(ev)
-        boundary = (
-            (f_prev and f_new and f_prev != f_new)
-            or is_save(prev)
-            or ev.get("kind") == "navigate" and prev.get("kind") != "navigate"
-            or ev["t_ms"] - prev["t_ms"] > IDLE_GAP_MS
-            or said_next
-        )
-        if boundary:
+        if starts_step(prev, ev) or said_next:
             groups.append([ev])
         else:
             groups[-1].append(ev)
@@ -82,9 +85,15 @@ def segment(events: list[dict], utterances: list[dict], questions: list[dict], *
     steps = []
     for i, grp in enumerate(groups):
         ids = [int(e["id"]) for e in grp if "id" in e]
+        shot = (
+            next((e for e in grp if e.get("keyframe_path") and is_decision(e)), None)
+            or next((e for e in grp if e.get("keyframe_path") and e.get("salient")), None)
+            or next((e for e in grp if e.get("keyframe_path")), None)
+        )
         steps.append(
             {
                 "idx": i + 1,
+                "keyframe_path": shot["keyframe_path"] if shot else None,
                 "title": _title(grp),
                 "t_start_ms": grp[0]["t_ms"],
                 "t_end_ms": grp[-1]["t_ms"],

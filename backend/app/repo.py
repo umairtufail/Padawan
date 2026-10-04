@@ -351,6 +351,7 @@ class SupabaseRepo:
                 {
                     "session_id": session_id, "t_ms": t_ms, "kind": e["kind"], "summary": e["summary"],
                     "payload": {k: e[k] for k in ("entities", "visible_text", "salient", "confidence") if k in e},
+                    **({"keyframe_path": e["keyframe_path"]} if e.get("keyframe_path") else {}),
                 }
                 for e in events
             ]
@@ -388,11 +389,15 @@ class SupabaseRepo:
             return []
         rows = await self._send(
             "GET",
-            f"/events?session_id=eq.{session_id}&select=id,t_ms,kind,summary,payload&order=id.asc&limit={int(limit)}",
+            f"/events?session_id=eq.{session_id}&select=id,t_ms,kind,summary,payload,keyframe_path&order=id.asc&limit={int(limit)}",
             user, returning=True,
         )
         return [
-            {"id": int(r["id"]), "t_ms": r["t_ms"], "kind": r["kind"], "summary": r["summary"], **(r.get("payload") or {})}
+            {
+                "id": int(r["id"]), "t_ms": r["t_ms"], "kind": r["kind"], "summary": r["summary"],
+                **({"keyframe_path": r["keyframe_path"]} if r.get("keyframe_path") else {}),
+                **(r.get("payload") or {}),
+            }
             for r in rows
         ]
 
@@ -409,12 +414,16 @@ class SupabaseRepo:
             return []
         rows = await self._send(
             "GET",
-            f"/events?session_id=eq.{session_id}&select=id,t_ms,kind,summary,payload&order=id.desc&limit={int(n)}",
+            f"/events?session_id=eq.{session_id}&select=id,t_ms,kind,summary,payload,keyframe_path&order=id.desc&limit={int(n)}",
             user, returning=True,
         )
         rows.reverse()
         return [
-            {"id": int(r["id"]), "t_ms": r["t_ms"], "kind": r["kind"], "summary": r["summary"], **(r.get("payload") or {})}
+            {
+                "id": int(r["id"]), "t_ms": r["t_ms"], "kind": r["kind"], "summary": r["summary"],
+                **({"keyframe_path": r["keyframe_path"]} if r.get("keyframe_path") else {}),
+                **(r.get("payload") or {}),
+            }
             for r in rows
         ]
 
@@ -477,16 +486,16 @@ class SupabaseRepo:
         return await self._send(
             "GET",
             f"/steps_draft?session_id=eq.{session_id}"
-            "&select=id,idx,title,t_start_ms,t_end_ms,event_ids,question_ids,status&order=idx.asc",
+            "&select=id,idx,title,t_start_ms,t_end_ms,event_ids,question_ids,status,keyframe_path&order=idx.asc",
             user, returning=True,
         )
 
     async def upsert_steps(self, user, session_id, steps) -> None:
         existing = {r["idx"]: r["id"] for r in await self.list_steps(user, session_id)}
-        fields = ("idx", "title", "t_start_ms", "t_end_ms", "event_ids", "question_ids", "status")
-        new = [{"session_id": session_id, **{k: s[k] for k in fields}} for s in steps if s["idx"] not in existing]
+        fields = ("idx", "title", "t_start_ms", "t_end_ms", "event_ids", "question_ids", "status", "keyframe_path")
+        new = [{"session_id": session_id, **{k: s.get(k) for k in fields}} for s in steps if s["idx"] not in existing]
         calls = [
-            self._send("PATCH", f"/steps_draft?id=eq.{existing[s['idx']]}", user, json={k: s[k] for k in fields})
+            self._send("PATCH", f"/steps_draft?id=eq.{existing[s['idx']]}", user, json={k: s.get(k) for k in fields})
             for s in steps
             if s["idx"] in existing
         ]

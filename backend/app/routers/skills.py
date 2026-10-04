@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse
 from ..auth import AuthUser, current_user
 from ..repo import RepoError, SessionRepo, SkillRecord, get_repo
 from ..schemas import SkillAuthor, SkillDetail, SkillJson, SkillSummary
+from ..services.keyframes import KeyframeStore, get_keyframes, sign_many
 from ..services.synthesizer import slugify
 
 log = logging.getLogger("padawan.skills")
@@ -23,13 +24,19 @@ def _summary(r: SkillRecord) -> dict:
     )
 
 
-def _detail(r: SkillRecord) -> SkillDetail:
+async def _detail(r: SkillRecord, user: AuthUser, store: KeyframeStore) -> SkillDetail:
     skill = None
     if r.skill_json:
         try:
             skill = SkillJson(**r.skill_json)
         except Exception:
             log.warning("skill %s has a skill_json that does not match the schema", r.id)
+    if skill is not None and r.author_id == user.id:
+        # Keyframes are private to the author (storage RLS), so only the author gets signed URLs.
+        urls = await sign_many(store, user, [s.screen_moment.keyframe_path for s in skill.steps if s.screen_moment])
+        for s in skill.steps:
+            if s.screen_moment:
+                s.screen_moment.keyframe_url = urls.get(s.screen_moment.keyframe_path)
     return SkillDetail(**_summary(r), skill=skill, skill_md=r.skill_md)
 
 
@@ -61,18 +68,24 @@ async def list_skills(
 
 
 @router.get("/skills/{skill_id}", response_model=SkillDetail)
-async def get_skill(skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)) -> SkillDetail:
-    return _detail(await _visible(repo, user, skill_id))
+async def get_skill(
+    skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
+    store: KeyframeStore = Depends(get_keyframes),
+) -> SkillDetail:
+    return await _detail(await _visible(repo, user, skill_id), user, store)
 
 
 @router.post("/skills/{skill_id}/publish", response_model=SkillDetail)
-async def publish_skill(skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)) -> SkillDetail:
+async def publish_skill(
+    skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
+    store: KeyframeStore = Depends(get_keyframes),
+) -> SkillDetail:
     """Author only. A draft needs a synthesized skill with at least one step. Publishing twice is a no-op."""
     rec = await _visible(repo, user, skill_id)
     if rec.author_id != user.id:
         raise HTTPException(403, "only the author can publish this skill")
     if rec.status == "published":
-        return _detail(rec)
+        return await _detail(rec, user, store)
     if not rec.skill_json or rec.steps_count < 1 or not rec.skill_md:
         raise HTTPException(409, "this skill has no steps yet: finish the teach-back first")
     rec.status = "published"
@@ -82,7 +95,7 @@ async def publish_skill(skill_id: str, user: AuthUser = Depends(current_user), r
     except RepoError:
         log.exception("could not publish skill")
         raise HTTPException(502, "storage unavailable")
-    return _detail(rec)
+    return await _detail(rec, user, store)
 
 
 @router.get("/skills/{skill_id}/export", response_class=PlainTextResponse)

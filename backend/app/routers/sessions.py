@@ -8,10 +8,11 @@ from ..auth import AuthUser, current_user
 from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
 from ..schemas import (
-    Event, FrameResponse, OffTheRecord, QuestionCandidate, SessionCreate, SessionDetail, SessionOut, SessionSummary,
+    Event, FrameResponse, KeyframeOut, OffTheRecord, QuestionCandidate, SessionCreate, SessionDetail, SessionOut, SessionSummary,
     StepUpdate, StoredEvent,
 )
-from ..services import gaps, question_planner, segmenter, vision
+from ..services import gaps, keyframes, question_planner, segmenter, vision
+from ..services.keyframes import KeyframeError, KeyframeNotFound, KeyframeStore, get_keyframes
 from ..services.pii import redact_frame_result
 
 log = logging.getLogger("padawan.sessions")
@@ -54,6 +55,56 @@ async def _candidates_for(user: AuthUser, repo: SessionRepo, session_id: str, pl
         return []
     gaps.record_candidates(session_id, [c.model_dump() for c in found])
     return found
+
+
+async def _keep_keyframe(
+    user: AuthUser, repo: SessionRepo, store: KeyframeStore, session_id: str, t_ms: int, data: bytes,
+    events: list[dict],
+) -> str | None:
+    """Store a small JPEG of this frame when it has a salient event or opens a new step. Never raises.
+
+    Raw pixels can show personal data, so nothing is kept when the text redactor found some on this frame.
+    (Off the record frames never get here.)
+    """
+    try:
+        if not events:
+            return None
+        wanted = any(e.get("salient") for e in events)
+        if not wanted:
+            prev = await repo.list_recent_events(user, session_id, 1)
+            wanted = not prev or segmenter.starts_step(prev[-1], {**events[0], "t_ms": t_ms})
+        if not wanted:
+            return None
+        jpeg = await asyncio.to_thread(keyframes.shrink, data)
+        path = keyframes.keyframe_path(user.id, session_id, t_ms)
+        await asyncio.wait_for(store.upload(user, path, jpeg), timeout=settings.keyframe_timeout_s)
+        return path
+    except Exception:
+        log.warning("keyframe not stored", exc_info=True)
+        return None
+
+
+@router.get("/sessions/{session_id}/keyframes/{t_ms}", response_model=KeyframeOut)
+async def get_keyframe(
+    session_id: str, t_ms: int, user: AuthUser = Depends(current_user),
+    repo: SessionRepo = Depends(get_repo), store: KeyframeStore = Depends(get_keyframes),
+) -> KeyframeOut:
+    """Short-lived signed URL of the keyframe stored at `t_ms` (exact match). Owner only."""
+    try:
+        session = await repo.get_session(user, session_id)
+    except RepoError:
+        log.exception("could not load session")
+        raise HTTPException(502, "storage unavailable")
+    if session is None:
+        raise HTTPException(404, "session not found")
+    try:
+        url = await store.signed_url(user, keyframes.keyframe_path(user.id, session_id, t_ms))
+    except KeyframeNotFound:
+        raise HTTPException(404, "no keyframe at this t_ms")
+    except KeyframeError:
+        log.exception("could not sign keyframe")
+        raise HTTPException(502, "storage unavailable")
+    return KeyframeOut(t_ms=t_ms, url=url, expires_in=keyframes.SIGNED_URL_TTL_S)
 
 
 @router.post("/teach/sessions", response_model=SessionOut, status_code=201)
@@ -135,6 +186,7 @@ async def post_frame(
     repo: SessionRepo = Depends(get_repo),
     extract: VisionFn = Depends(get_vision),
     plan: PlannerFn = Depends(get_planner),
+    kf_store: KeyframeStore = Depends(get_keyframes),
 ) -> FrameResponse:
     if session_id in _off_record:
         # Checked first: the frame is not read, analysed or stored, and goes nowhere.
@@ -180,7 +232,7 @@ async def post_frame(
             return FrameResponse(t_ms=t_ms, skipped="parse_error", latency_ms=result.latency_ms)
 
         # Redact personal data before anything is stored, returned or fed back as the next PREVIOUS_SCREEN.
-        summary, clean_events, _ = redact_frame_result(
+        summary, clean_events, redactions = redact_frame_result(
             result.screen_summary, [r for r in result.events if isinstance(r, dict)]
         )
         events: list[Event] = []
@@ -190,10 +242,13 @@ async def post_frame(
             except Exception:
                 continue  # ignore a malformed event, keep the rest
 
+        rows = [e.model_dump(exclude={"id"}) for e in events]
+        kf_path = None if redactions else await _keep_keyframe(user, repo, kf_store, session_id, t_ms, data, rows)
+        if kf_path:
+            for row in rows:
+                row["keyframe_path"] = kf_path
         try:
-            ids = await repo.save_frame_result(
-                user, session_id, t_ms, summary, [e.model_dump(exclude={"id"}) for e in events]
-            )
+            ids = await repo.save_frame_result(user, session_id, t_ms, summary, rows)
         except RepoError:
             # Not stored, so the saved summary stays as it was and the next frame compares against that.
             log.exception("could not store the frame result")
