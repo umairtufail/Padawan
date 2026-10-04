@@ -21,7 +21,7 @@ type Props = {
   onStop: () => void;
   onMic: (on: boolean) => void;
   onAskYoda: () => void;
-  onSimulateSpeech: () => void;
+  onSimulateSpeech?: () => void;
 };
 
 function presenceOf(p: Pick<Props, "status" | "agentSpeaking" | "awaitingAnswer" | "micOn" | "expertSpeaking">): PresenceState {
@@ -84,7 +84,7 @@ export default function YodaVoicePanel(p: Props) {
                 <button type="button" className={btnGhost} onClick={p.onStop}>Send Yoda away</button>
               </>
             )}
-            {p.mock && connected && (
+            {p.mock && connected && p.onSimulateSpeech && (
               <button type="button" className={btnGhost} onClick={p.onSimulateSpeech}>Simulate Master talking (4 s)</button>
             )}
           </div>

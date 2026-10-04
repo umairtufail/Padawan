@@ -9,9 +9,15 @@ export const MOCK = process.env.NEXT_PUBLIC_API_MOCK === "1";
 
 import { AUTH_MODE, supabase } from "./supabase";
 import { seedSkills } from "./skills-mock";
-import { skillToMarkdown, toSummary, type SkillDetail, type SkillStatus, type SkillSummary } from "./skills";
+import { detailFromSkill, skillToMarkdown, toSummary, type SkillDetail, type SkillSummary } from "./skills";
+import { newUuid } from "./capture-sync";
+import { findGaps, segmentEvents, synthesizeMockSkill, type MockAnswer, type MockQuestion } from "./mock-pipeline";
+import type {
+  AnswerBody, FinishResult, QuestionAskedBody, QuestionCandidate, StepDraft, StepUpdate, TeachbackResult, UtteranceIn,
+} from "./pipeline-types";
 
 export type { SkillDetail, SkillSummary, SkillJson, SkillStep, SkillGuardrail } from "./skills";
+export type * from "./pipeline-types";
 
 const TOKEN_KEY = "padawan_token";
 const USER_KEY = "padawan_user";
@@ -30,14 +36,14 @@ export type PadawanEvent = {
   t_ms?: number;
 };
 
-export type SkipReason = "busy" | "timeout" | "vision_error" | "parse_error" | "storage_error";
+export type SkipReason = "busy" | "timeout" | "vision_error" | "parse_error" | "storage_error" | "off_the_record";
 
 export type FrameResponse = {
   t_ms: number;
   screen_summary: string;
   events: PadawanEvent[];
-  question_candidates: unknown[];
-  step_update: unknown | null;
+  question_candidates: QuestionCandidate[];
+  step_update: StepUpdate | null;
   latency_ms: number | null;
   skipped: SkipReason | null;
 };
@@ -190,6 +196,12 @@ async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: b
     try {
       const body = await res.json();
       if (typeof body?.detail === "string") detail = body.detail;
+      else if (body?.detail && typeof body.detail === "object") {
+        // e.g. 502 {"detail": {"error": "synthesis_failed", "problems": ["..."]}}
+        const d = body.detail as { error?: unknown; problems?: unknown };
+        const problems = Array.isArray(d.problems) ? d.problems.filter((p): p is string => typeof p === "string") : [];
+        if (typeof d.error === "string") detail = problems.length ? `${d.error}: ${problems.join("; ")}` : d.error;
+      }
     } catch {
       /* non-JSON error body */
     }
@@ -361,9 +373,17 @@ export async function sendFrame(sessionId: string, tMs: number, frame: Blob): Pr
     mockSave();
     const { t_ms, ...rest } = ev;
     void t_ms;
+    const pipe = mockPipeline(sessionId);
+    const steps = segmentEvents(s.events, pipe.questions, false);
+    const last = steps[steps.length - 1];
+    const candidates: QuestionCandidate[] = ev.salient
+      ? [{ id: newUuid(), type: ev.kind === "click" ? "guardrail" : "reason", text: mockCandidateText(ev), anchor_event_id: ev.id, priority: 0.9 }]
+      : [];
     return {
       t_ms: tMs, screen_summary: s.last_screen_summary, events: [rest],
-      question_candidates: [], step_update: null, latency_ms: 600, skipped: null,
+      question_candidates: candidates,
+      step_update: last ? { idx: last.idx, title: last.title, status: last.status } : null,
+      latency_ms: 600, skipped: null,
     };
   }
   const form = new FormData();
@@ -372,12 +392,183 @@ export async function sendFrame(sessionId: string, tMs: number, frame: Blob): Pr
   return request(`/v1/sessions/${encodeURIComponent(sessionId)}/frames`, { method: "POST", body: form });
 }
 
+function mockCandidateText(ev: PadawanEvent): string {
+  const e = ev.entities ?? {};
+  if (e.field && e.from && e.to) return `Why did you change the ${e.field} from ${e.from} to ${e.to}?`;
+  if (e.button) return `Why ${e.button.toLowerCase()} now, and what would make you hold off?`;
+  return `Why did you do this: ${ev.summary.replace(/[.?!]+$/, "")}?`;
+}
+
+// ---------- skills pipeline: transcript, questions, steps, finish, teach-back ----------
+// Real contract (backend/app/routers/capture.py, docs/frontend-integration.md section 3b). None of these run per frame.
+
+type MockPipeline = {
+  questions: MockQuestion[];
+  answers: MockAnswer[];
+  utterances: UtteranceIn[];
+  skillId: string | null;
+};
+const MOCK_PIPE_KEY = "padawan_mock_pipeline";
+
+function mockPipelines(): Record<string, MockPipeline> {
+  const g = globalThis as unknown as { __padawanMockPipe?: Record<string, MockPipeline> };
+  if (!g.__padawanMockPipe && hasStorage()) {
+    try {
+      const raw = window.localStorage.getItem(MOCK_PIPE_KEY);
+      if (raw) g.__padawanMockPipe = JSON.parse(raw) as Record<string, MockPipeline>;
+    } catch {
+      /* ignore corrupt mock data */
+    }
+  }
+  if (!g.__padawanMockPipe) g.__padawanMockPipe = {};
+  return g.__padawanMockPipe;
+}
+
+function mockPipeline(sessionId: string): MockPipeline {
+  const all = mockPipelines();
+  return (all[sessionId] ??= { questions: [], answers: [], utterances: [], skillId: null });
+}
+
+function mockPipeSave() {
+  if (!hasStorage()) return;
+  try {
+    window.localStorage.setItem(MOCK_PIPE_KEY, JSON.stringify(mockPipelines()));
+  } catch {
+    /* ignore */
+  }
+}
+
+function mockSessionOrThrow(sessionId: string): MockSession {
+  mockRequireToken();
+  const s = mockStore().find((x) => x.session_id === sessionId);
+  if (!s) throw new ApiError(404, "session not found");
+  return s;
+}
+
+const post = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+const sid = (id: string) => encodeURIComponent(id);
+
+/** Stores transcript lines (1 to 200). */
+export async function postUtterances(sessionId: string, utterances: UtteranceIn[]): Promise<{ stored: number; ids: number[] }> {
+  if (MOCK) {
+    await sleep(80);
+    mockSessionOrThrow(sessionId);
+    const pipe = mockPipeline(sessionId);
+    pipe.utterances.push(...utterances);
+    mockPipeSave();
+    return { stored: utterances.length, ids: utterances.map((_, i) => pipe.utterances.length - utterances.length + i + 1) };
+  }
+  return request(`/v1/sessions/${sid(sessionId)}/utterances`, post({ utterances }));
+}
+
+/** Records that a question was asked (the candidate id from the frame response, or a client UUID). Idempotent per id. */
+export async function postQuestionAsked(sessionId: string, questionId: string, body: QuestionAskedBody): Promise<void> {
+  if (MOCK) {
+    await sleep(80);
+    mockSessionOrThrow(sessionId);
+    const pipe = mockPipeline(sessionId);
+    const row: MockQuestion = {
+      id: questionId, type: body.type ?? "reason", text: body.text, anchor_event_id: body.anchor_event_id ?? null,
+      phase: body.phase ?? "live", answered: false,
+    };
+    const i = pipe.questions.findIndex((q) => q.id === questionId);
+    if (i >= 0) pipe.questions[i] = { ...row, answered: pipe.questions[i].answered };
+    else pipe.questions.push(row);
+    mockPipeSave();
+    return;
+  }
+  await request(`/v1/sessions/${sid(sessionId)}/questions/${encodeURIComponent(questionId)}/asked`, post(body));
+}
+
+/** The expert's answer to a question that was recorded with postQuestionAsked. 404 if it never was. */
+export async function postAnswer(sessionId: string, body: AnswerBody): Promise<{ question_id: string; utterance_id: number }> {
+  if (MOCK) {
+    await sleep(80);
+    mockSessionOrThrow(sessionId);
+    const pipe = mockPipeline(sessionId);
+    const q = pipe.questions.find((x) => x.id === body.question_id);
+    if (!q) throw new ApiError(404, "question not found");
+    q.answered = true;
+    pipe.answers.push({ question_id: body.question_id, quote: body.quote, summary: body.summary ?? "" });
+    pipe.utterances.push({ t_ms: body.t_ms ?? 0, speaker: "expert", text: body.quote });
+    mockPipeSave();
+    return { question_id: body.question_id, utterance_id: pipe.utterances.length };
+  }
+  return request(`/v1/sessions/${sid(sessionId)}/answers`, post(body));
+}
+
+/** The steps built so far. */
+export async function getSteps(sessionId: string): Promise<StepDraft[]> {
+  if (MOCK) {
+    await sleep(100);
+    const s = mockSessionOrThrow(sessionId);
+    return segmentEvents(s.events, mockPipeline(sessionId).questions, false);
+  }
+  const r = await request<{ steps: StepDraft[] }>(`/v1/sessions/${sid(sessionId)}/steps`);
+  return r.steps;
+}
+
+/** Closes the steps, computes the gaps for the debrief. */
+export async function finishSession(sessionId: string): Promise<FinishResult> {
+  if (MOCK) {
+    await sleep(500);
+    const s = mockSessionOrThrow(sessionId);
+    const steps = segmentEvents(s.events, mockPipeline(sessionId).questions, true);
+    return { session_id: sessionId, status: "debrief", steps, gaps: findGaps(steps, s.events) };
+  }
+  return request(`/v1/sessions/${sid(sessionId)}/finish`, { method: "POST" });
+}
+
+/** Runs the synthesis (3 to 30 s) and returns the new draft skill. 400 if not confirmed, 409 if nothing was captured. */
+export async function postTeachback(sessionId: string, confirmed: boolean, corrections: string[]): Promise<TeachbackResult> {
+  if (MOCK) {
+    await sleep(1800);
+    const s = mockSessionOrThrow(sessionId);
+    if (!confirmed) throw new ApiError(400, "the teach-back must be confirmed");
+    const pipe = mockPipeline(sessionId);
+    const steps = segmentEvents(s.events, pipe.questions, true);
+    if (steps.length === 0) throw new ApiError(409, "this session captured nothing yet");
+    const id = pipe.skillId ?? `skill-${newUuid().slice(0, 8)}`;
+    const json = synthesizeMockSkill({
+      id, title: s.title, author: { id: "admin", name: getUserName() ?? "Admin" }, steps, events: s.events,
+      questions: pipe.questions, answers: pipe.answers, corrections, now: new Date().toISOString(),
+    });
+    const list = mockSkills();
+    const old = list.findIndex((x) => x.id === id);
+    const keep = old >= 0 ? list[old] : null;
+    const detail = detailFromSkill(json, {
+      status: keep?.status ?? "draft", domain: keep?.domain ?? null, published_at: keep?.published_at ?? null,
+    });
+    if (old >= 0) list[old] = detail;
+    else list.unshift(detail);
+    pipe.skillId = id;
+    mockSkillsSave();
+    mockPipeSave();
+    return { skill_id: id, status: "draft", steps_count: detail.steps_count, guardrails_count: detail.guardrails_count, attempts: 1 };
+  }
+  return request(`/v1/sessions/${sid(sessionId)}/teachback`, post({ confirmed, corrections }));
+}
+
+/** Off the record: the backend stops analysing and storing frames until it is switched off again. */
+export async function setOffTheRecord(sessionId: string, on: boolean): Promise<void> {
+  if (MOCK) {
+    await sleep(50);
+    mockSessionOrThrow(sessionId);
+    return;
+  }
+  await request(`/v1/sessions/${sid(sessionId)}/off-the-record`, post({ on }));
+}
+
 // ---------- skills (Holocrons) ----------
-// Backend contract (assumed until the Skills API lands, see docs/frontend-integration.md):
-//   GET  /v1/skills?status=published|draft   -> SkillSummary[]  (published: everyone; draft: only the caller's own)
-//   GET  /v1/skills/{id}                     -> SkillDetail (the skill JSON from Notion page 03 plus status fields)
-//   POST /v1/skills/{id}/publish             -> SkillDetail (author only)
-//   GET  /v1/skills/{id}/export              -> SKILL.md as text/markdown
+// Real contract (backend/app/routers/skills.py):
+//   GET  /v1/skills?q=&domain=&mine=   -> SkillSummary[]  (published ones, or with mine=true your own incl. drafts)
+//   GET  /v1/skills/{id}               -> SkillDetail = SkillSummary + skill (JSON or null) + skill_md
+//   POST /v1/skills/{id}/publish       -> SkillDetail (author only; 409 without steps)
+//   GET  /v1/skills/{id}/export        -> SKILL.md as text/markdown
 
 const MOCK_SKILLS_KEY = "padawan_mock_skills";
 
@@ -410,13 +601,26 @@ function mockFindSkill(id: string): SkillDetail {
   return s;
 }
 
-export async function listSkills(status: SkillStatus = "published"): Promise<SkillSummary[]> {
+export type SkillQuery = { q?: string; domain?: string; mine?: boolean };
+
+export async function listSkills({ q, domain, mine }: SkillQuery = {}): Promise<SkillSummary[]> {
   if (MOCK) {
     await sleep(250);
     mockRequireToken();
-    return mockSkills().filter((s) => s.status === status).map(toSummary);
+    const words = (q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    return mockSkills()
+      .filter((s) => (mine ? s.author.id === "admin" : s.status === "published"))
+      .filter((s) => !domain || s.domain === domain)
+      .filter((s) => words.every((w) => `${s.title} ${s.description}`.toLowerCase().includes(w)))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map(toSummary);
   }
-  return request(`/v1/skills?status=${status}`);
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (domain) params.set("domain", domain);
+  if (mine) params.set("mine", "true");
+  const qs = params.toString();
+  return request(`/v1/skills${qs ? `?${qs}` : ""}`);
 }
 
 export async function getSkill(id: string): Promise<SkillDetail> {
@@ -434,6 +638,7 @@ export async function publishSkill(id: string): Promise<SkillDetail> {
     mockRequireToken();
     const s = mockFindSkill(id);
     if (s.status !== "published") {
+      if (!s.skill || s.steps_count < 1) throw new ApiError(409, "this skill has no steps yet: finish the teach-back first");
       s.status = "published";
       s.published_at = new Date().toISOString();
       mockSkillsSave();
@@ -448,7 +653,9 @@ export async function exportSkill(id: string): Promise<string> {
   if (MOCK) {
     await sleep(150);
     mockRequireToken();
-    return skillToMarkdown(mockFindSkill(id));
+    const found = mockFindSkill(id);
+    if (!found.skill) throw new ApiError(404, "this skill has no SKILL.md yet");
+    return found.skill_md ?? skillToMarkdown(found.skill);
   }
   return request(`/v1/skills/${encodeURIComponent(id)}/export`, {}, { text: true });
 }

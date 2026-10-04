@@ -26,6 +26,8 @@ type Inputs = {
   /** Sends `[ASK] question` to Yoda; returns false if it could not. */
   ask: (question: string) => boolean;
   sendContext: (text: string) => void;
+  /** Called after a question was sent to Yoda (report it to the backend). `checks` is the "why now" trace. */
+  onAsked?: (candidate: QuestionCandidate, info: { manual: boolean; checks?: Check[] }) => void;
   config?: Partial<PauseConfig>;
 };
 
@@ -96,6 +98,11 @@ export function usePauseController(inputs: Inputs) {
           lastSignature.current = "";
           setAsked((n) => n + 1);
           log("ask", `Asked now: ${c.question}`, decision.checks);
+          try {
+            s.onAsked?.(c, { manual: false, checks: decision.checks });
+          } catch {
+            /* reporting must never break the conversation */
+          }
           setPending(controller.pending(now));
         }
       } else if (controller.pending(now).length > 0) {
@@ -122,6 +129,11 @@ export function usePauseController(inputs: Inputs) {
       controller.recordAsk(candidate, now, true);
       setAsked((n) => n + 1);
       log("manual", `Asked on request: ${candidate.question}`);
+      try {
+        latest.current.onAsked?.(candidate, { manual: true });
+      } catch {
+        /* reporting must never break the conversation */
+      }
       setPending(controller.pending(now));
       return true;
     },

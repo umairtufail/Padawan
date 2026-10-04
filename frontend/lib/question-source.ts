@@ -1,35 +1,33 @@
 import type { FrameResponse, PadawanEvent } from "./api";
 
 /** A question as it arrives from a source, before it enters the pause controller's queue. */
-export type RawQuestion = { id: string; question: string; priority: number; source: "model" | "stub" };
+export type RawQuestion = {
+  /** For model questions this is the backend's candidate id (a UUID), needed for POST .../questions/{id}/asked. */
+  id: string;
+  question: string;
+  priority: number;
+  source: "model" | "stub";
+  type?: string;
+  anchorEventId?: number | null;
+};
 
-/**
- * Questions from the model's `question_candidates` in a frame response. The planner (#27) has not landed, so the
- * exact shape is not fixed: accept plain strings and objects with `question` or `text` (and optional `id`, `priority`).
- */
-export function candidatesFromResponse(res: Pick<FrameResponse, "question_candidates" | "t_ms">): RawQuestion[] {
+/** Questions from the backend's `question_candidates` (at most 3 per frame, best first). */
+export function candidatesFromResponse(res: Pick<FrameResponse, "question_candidates">): RawQuestion[] {
   const out: RawQuestion[] = [];
-  (res.question_candidates ?? []).forEach((raw, i) => {
-    let question = "";
-    let id = "";
-    let priority = 5;
-    if (typeof raw === "string") question = raw;
-    else if (raw && typeof raw === "object") {
-      const o = raw as Record<string, unknown>;
-      const q = o.question ?? o.text;
-      if (typeof q === "string") question = q;
-      if (typeof o.id === "string" || typeof o.id === "number") id = String(o.id);
-      if (typeof o.priority === "number") priority = o.priority;
-    }
-    question = question.trim();
-    if (question) out.push({ id: id || `model-${res.t_ms}-${i}`, question, priority, source: "model" });
-  });
+  for (const c of res.question_candidates ?? []) {
+    const question = typeof c?.text === "string" ? c.text.trim() : "";
+    if (!question || typeof c.id !== "string" || !c.id) continue;
+    out.push({
+      id: c.id, question, priority: typeof c.priority === "number" ? c.priority : 0.5, source: "model",
+      type: c.type, anchorEventId: typeof c.anchor_event_id === "number" ? c.anchor_event_id : null,
+    });
+  }
   return out;
 }
 
 /**
- * Stub source until the question planner lands (#27): a "why" question for a salient event.
- * Only used when the model sent no candidates for the frame.
+ * Fallback when the planner sends nothing (it is slow, failed or off): a "why" question for a salient event.
+ * Only used when the backend sent no candidates for the frame.
  */
 export function stubQuestionFromEvent(ev: PadawanEvent): RawQuestion | null {
   if (!ev.salient) return null;
@@ -39,7 +37,8 @@ export function stubQuestionFromEvent(ev: PadawanEvent): RawQuestion | null {
   else if (e.button) question = `Why did you click ${e.button} now?`;
   else if (ev.summary) question = `Why this: ${ev.summary.replace(/[.?!]+$/, "")}?`;
   else return null;
-  return { id: `stub-${ev.id}`, question, priority: 3, source: "stub" };
+  // Below every model priority (0 to 1), so a real candidate always goes first.
+  return { id: `stub-${ev.id}`, question, priority: -1, source: "stub", type: "reason", anchorEventId: ev.id };
 }
 
 /** Candidates for a frame response: the model's if present, else the stub for its salient events. */

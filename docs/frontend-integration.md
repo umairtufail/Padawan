@@ -299,16 +299,15 @@ uv run pytest -m live    # calls Nebius with a real frame, and runs a real synth
 uv run python -m scripts.eval_question_planner --trials 5   # real model: is the planner's output sensible?
 ```
 
-## 9. Skills (Holocrons): what the frontend expects
+## 9. What the frontend does with these endpoints
 
-The Holocron view (`/dashboard/skills/[id]`) and the Jedi Archives (`/dashboard/skills`) use these calls from `frontend/lib/api.ts`. **Until the backend ships them, `NEXT_PUBLIC_API_MOCK=1` serves sample data** (two published skills and one draft; publishing a draft in mock mode is kept in localStorage). This is what the frontend assumes, tell us if the backend differs:
+The contract in sections 3 and 3b is what `frontend/lib/api.ts` implements (no assumptions left). With `NEXT_PUBLIC_API_MOCK=1` every call is mocked (including a scripted Yoda, no ElevenLabs and no microphone), so the whole flow runs without a backend.
 
-- `GET /v1/skills?status=published|draft` returns `[{id, title, description, domain, language, status, author: {id, name}, steps_count, guardrails_count, created_at, published_at}]`. `published` lists every published skill, `draft` only the caller's own.
-- `GET /v1/skills/{id}` returns the skill JSON from Notion page 03 (`id, title, description, author, created_at, language, steps[], global_guardrails[], teachback`) plus `status, domain, steps_count, guardrails_count, published_at`.
-- `POST /v1/skills/{id}/publish` (author only) returns the same detail with `status: "published"`.
-- `GET /v1/skills/{id}/export` returns the rendered SKILL.md as plain text.
-- Keyframe images are not shown yet (private storage with signed URLs): a step shows the timestamp and the `screen_moment.description`.
-- "Start learning" links to `/dashboard/learn/{id}`, which is not built yet.
+- **Live session** (`/dashboard/teach/[id]`): transcript lines go to `utterances` in batches every 4 s (expert lines are skipped while off the record); when the pause controller sends a question, the page calls `questions/{qid}/asked` with the "why now" trace (the candidate `id` is used when it is a UUID, stub and manual questions get a client UUID); `log_answer` calls `answers` with the expert's transcribed words as `quote`. `question_candidates` feed the pause controller; the stub question source only runs when a frame brings none. Steps come from `GET steps` every 4 s and at once when `step_update` changes.
+- **Finish session** calls `finish`, keeps the result in `sessionStorage`, and opens `/dashboard/teach/[id]/debrief`.
+- **Debrief**: the voice session (`mode=debrief`) starts by itself, Yoda asks the gaps aloud and explains the process back, and `submit_teachback` (or the mock "yes, exactly" button) calls `teachback`, then the page opens the new draft at `/dashboard/skills/[id]`, which has the Publish button. Typed answers are an accessibility fallback (no microphone, or the connection failed). At least 3 gap answers (or all, if fewer) are required before the teach-back.
+- **Archives** use `GET /v1/skills` (published) and `?mine=true` ("My Holocrons", drafts included). A `SkillDetail` has the skill JSON under `skill` (can be `null`); `reason` can be `null`, guardrails have `source`.
+- Keyframe images are not shown yet: a step shows the timestamp and `screen_moment.description`. "Start learning" links to `/dashboard/learn/{id}`, which is not built yet.
 
 Optional backend settings for the question planner and synthesizer (all have defaults): `NEBIUS_TEXT_MODEL` (empty = same as `NEBIUS_VLM_MODEL`), `PLANNER_TIMEOUT_S` (5), `SYNTHESIS_TIMEOUT_S` (60), `SEGMENTER_EVERY_EVENTS` (10), `SEGMENTER_EVERY_S` (20).
 

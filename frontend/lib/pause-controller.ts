@@ -13,6 +13,9 @@ export type QuestionCandidate = {
   /** Higher goes first. */
   priority: number;
   source: QuestionSource;
+  /** Question type and the event it is about (from the backend's candidate), reported when it is asked. */
+  type?: string;
+  anchorEventId?: number | null;
   /** When the candidate entered the queue (ms epoch). */
   queuedAt: number;
 };

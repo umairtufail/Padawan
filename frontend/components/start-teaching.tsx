@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiError, createTeachSession } from "../lib/api";
+import { ApiError, createTeachSession, MOCK } from "../lib/api";
 import { stashStream } from "../lib/capture-handoff";
 import { btnPrimary, ErrorBox } from "./ui";
 
@@ -30,6 +30,20 @@ export default function StartTeaching({ title = "New task", label = "Start teach
 
   async function start() {
     setError("");
+    if (MOCK) {
+      // Mock mode: no screen to share. The session page has a button that feeds scripted frames instead.
+      setPhase("creating");
+      try {
+        const session = await createTeachSession(title.trim() || "New task");
+        router.push(`/dashboard/teach/${session.session_id}`);
+      } catch (err) {
+        setPhase("idle");
+        if (!(err instanceof ApiError && err.status === 401)) {
+          setError(err instanceof Error ? err.message : "Could not create a session.");
+        }
+      }
+      return;
+    }
     if (!navigator.mediaDevices?.getDisplayMedia) {
       setError("Screen sharing is not supported in this browser.");
       return;
