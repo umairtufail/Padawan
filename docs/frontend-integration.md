@@ -99,6 +99,24 @@ Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token
 - **Off the record.** `POST /v1/sessions/{id}/off-the-record` with `{"on": true}` (or `false`) returns `{"on": ...}`. While on, every frame returns `skipped: "off_the_record"`, is not analysed or stored, and is not sent to any model. The client should also stop capturing and mute the mic while it is on. The flag is held in server memory (lost on restart, per instance, not yet persisted); re-send it after a reconnect.
 - Errors: `401` missing or invalid token (supabase mode), `404` unknown session or someone else's, `400` empty frame, `413` frame over 4 MB, `502` storage unavailable.
 
+### Start a voice conversation with Yoda
+`POST /v1/voice/sessions` with JSON `{"session_id": "...", "mode": "capture" | "debrief" | "tutor", "pending_question": ""}` (`pending_question` is optional). Needs the same login token as the other calls, and the session must belong to the caller (else `404`). Returns:
+
+```json
+{
+  "signed_url": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=...&conversation_signature=...",
+  "agent_id": "agent_...",
+  "dynamic_variables": {"mode": "live", "task_title": "Process supplier invoices", "gaps": "", "last_screen_summary": "...", "pending_question": ""}
+}
+```
+
+- `capture` and `debrief` use the interviewer agent (`mode` is `live` or `debrief`), `tutor` uses the tutor agent (variables `task_title`, `skill_md`, `expert`). `gaps` (debrief) and `skill_md`/`expert` (tutor) are placeholders until the question planner and skills exist.
+- Start the conversation in the browser with the ElevenLabs SDK, passing the `signed_url` and the `dynamic_variables` (for the JS SDK: `Conversation.startSession({ signedUrl, dynamicVariables })`). The browser never sees the API key. The signed URL is short lived: ask for a new one per conversation.
+- **The interviewer is silent until you send it a user message starting with `[ASK]`**, for example `[ASK] Why did you change the cost center from 4711 to 0400?`. It then asks that question aloud, in one sentence, and stops. In debrief mode, send `[START]` to make it begin. The tutor greets first and reacts to `[INTERVENE]`.
+- Client tools the agents may call (implement them in the page): interviewer `log_answer(question_id, summary)`, `set_off_record(on)`, `submit_teachback(confirmed, corrections)`; tutor `record_prediction(step_idx, predicted)` (return a string saying whether it was right), `show_replay(step_idx)`, `finish_learning()`.
+- Errors: `401` bad token, `404` unknown or someone else's session, `422` bad `mode`, `502` ElevenLabs unavailable or voice not configured.
+- Agents are created and updated by `cd backend && uv run python -m scripts.setup_voice_agents` (prompts live in `backend/app/prompts/interviewer.system.md` and `tutor.system.md`; re-run the script after editing them). Agent ids are in `.env` as `ELEVENLABS_INTERVIEWER_AGENT_ID` and `ELEVENLABS_TUTOR_AGENT_ID`.
+
 ## 4. Rules for the browser
 
 1. **Send frames straight to the backend**, not through a Next.js API route (Vercel limits bodies to 4.5 MB and adds latency).
