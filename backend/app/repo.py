@@ -34,6 +34,10 @@ class SessionRecord:
     skill_id: str | None = None
     status: str = "live"
     kind: str = "teach"  # teach | learn
+    mastery_score: int | None = None  # learn sessions: set when finished
+    skill_title: str = ""
+    steps_total: int = 0
+    steps_done: int = 0
 
 
 @dataclass
@@ -121,7 +125,19 @@ class SessionRepo(Protocol):
         """Insert or update steps by (session, idx)."""
         ...
 
-    async def set_session_state(self, user: AuthUser, session_id: str, *, status: str | None = None, skill_id: str | None = None) -> None: ...
+    async def set_session_state(
+        self, user: AuthUser, session_id: str, *, status: str | None = None, skill_id: str | None = None,
+        mastery_score: int | None = None,
+    ) -> None: ...
+
+    async def list_learn_sessions(self, user: AuthUser) -> list[SessionRecord]:
+        """The caller's own learn sessions newest first, with skill_title, steps_total, steps_done, mastery_score."""
+        ...
+
+    async def skill_stats(self, user: AuthUser, skill_ids: list[str]) -> dict[str, tuple[int, float | None]]:
+        """{skill_id: (distinct learners, average mastery of finished sessions or None)} for skills the caller can
+        see. Aggregates only: never who learned."""
+        ...
 
     # learn mode: one row per (learn session, skill step)
     async def upsert_attempt(self, user: AuthUser, session_id: str, skill_id: str, step_idx: int, fields: dict) -> None:
@@ -236,10 +252,12 @@ class MemoryRepo:
         for s in steps:
             bucket[s["idx"]] = dict(s)
 
-    async def set_session_state(self, user, session_id, *, status=None, skill_id=None) -> None:
+    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None) -> None:
         if not self._owns(user, session_id):
             raise RepoError("session not found")
         rec = self._sessions[session_id]
+        if mastery_score is not None:
+            rec.mastery_score = mastery_score
         if status is not None:
             rec.status = status
         if skill_id is not None:
@@ -267,9 +285,37 @@ class MemoryRepo:
 
     async def get_skill(self, user, skill_id) -> SkillRecord | None:
         rec = self._skills.get(skill_id)
-        if rec is None or (rec.status != "published" and rec.author_id != user.id):
+        if rec is None:
+            return None
+        if rec.status != "published" and rec.author_id != user.id and not self._has_learn_session(user, skill_id):
             return None
         return rec
+
+    def _has_learn_session(self, user, skill_id) -> bool:
+        return any(s.kind == "learn" and s.user_id == user.id and s.skill_id == skill_id for s in self._sessions.values())
+
+    async def list_learn_sessions(self, user) -> list[SessionRecord]:
+        out = []
+        for r in self._sessions.values():
+            if r.user_id != user.id or r.kind != "learn":
+                continue
+            sk = self._skills.get(r.skill_id or "")
+            r.skill_title = sk.title if sk else r.title
+            r.steps_total = sk.steps_count if sk else 0
+            r.steps_done = sum(1 for (sid, _) in self._attempts if sid == r.id)  # steps with any progress
+            out.append(r)
+        return sorted(out, key=lambda r: r.created_at, reverse=True)
+
+    async def skill_stats(self, user, skill_ids) -> dict[str, tuple[int, float | None]]:
+        out = {}
+        for sid in skill_ids:
+            sk = self._skills.get(sid)
+            if sk is None or (sk.status != "published" and sk.author_id != user.id):
+                continue
+            ss = [s for s in self._sessions.values() if s.kind == "learn" and s.skill_id == sid]
+            scores = [s.mastery_score for s in ss if s.status == "done" and s.mastery_score is not None]
+            out[sid] = (len({s.user_id for s in ss}), round(sum(scores) / len(scores), 1) if scores else None)
+        return out
 
     async def list_skills(self, user, q, domain, mine) -> list[SkillRecord]:
         rows = [s for s in self._skills.values() if (s.author_id == user.id if mine else s.status == "published")]
@@ -539,10 +585,43 @@ class SupabaseRepo:
             calls.append(self._send("POST", "/steps_draft", user, json=new))
         await asyncio.gather(*calls)
 
-    async def set_session_state(self, user, session_id, *, status=None, skill_id=None) -> None:
-        patch = {k: v for k, v in (("status", status), ("skill_id", skill_id)) if v is not None}
+    async def set_session_state(self, user, session_id, *, status=None, skill_id=None, mastery_score=None) -> None:
+        patch = {
+            k: v for k, v in (("status", status), ("skill_id", skill_id), ("mastery_score", mastery_score)) if v is not None
+        }
         if patch and self._check_uuid(session_id):
             await self._send("PATCH", f"/sessions?id=eq.{session_id}", user, json=patch)
+
+    async def list_learn_sessions(self, user) -> list[SessionRecord]:
+        rows = await self._send(
+            "GET", "/sessions", user, returning=True,
+            params={
+                "kind": "eq.learn", "user_id": f"eq.{user.id}", "order": "started_at.desc", "limit": "100",
+                "select": "id,user_id,title,started_at,skill_id,status,mastery_score,"
+                          "skills(title,steps_count),learn_attempts(count)",
+            },
+        )
+        out = []
+        for r in rows:
+            sk = r.get("skills") or {}
+            done = (r.get("learn_attempts") or [{}])[0].get("count", 0)
+            out.append(SessionRecord(
+                id=r["id"], user_id=r["user_id"], title=r["title"] or "", created_at=datetime.fromisoformat(r["started_at"]),
+                skill_id=r.get("skill_id"), status=r.get("status") or "live", kind="learn",
+                mastery_score=r.get("mastery_score"), skill_title=sk.get("title") or r["title"] or "",
+                steps_total=sk.get("steps_count") or 0, steps_done=int(done),
+            ))
+        return out
+
+    async def skill_stats(self, user, skill_ids) -> dict[str, tuple[int, float | None]]:
+        ids = [i for i in skill_ids if self._check_uuid(i)]
+        if not ids:
+            return {}
+        rows = await self._send("POST", "/rpc/skill_stats", user, returning=True, json={"skill_ids": ids})
+        return {
+            r["skill_id"]: (int(r["learners_count"] or 0), None if r["avg_mastery"] is None else float(r["avg_mastery"]))
+            for r in rows
+        }
 
     async def upsert_attempt(self, user, session_id, skill_id, step_idx, fields) -> None:
         if not (self._check_uuid(session_id) and self._check_uuid(skill_id)):

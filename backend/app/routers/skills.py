@@ -1,6 +1,7 @@
 """Skills API: the Jedi Archives (list, read, publish, export)."""
 
 import logging
+from typing import Literal
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,15 +17,25 @@ log = logging.getLogger("padawan.skills")
 router = APIRouter()
 
 
-def _summary(r: SkillRecord) -> dict:
-    return dict(
+def _summary(r: SkillRecord, stats: dict[str, tuple[int, float | None]] | None = None) -> dict:
+    learners, avg = (stats or {}).get(r.id, (0, None))
+    return dict(learners_count=learners, avg_mastery=avg,
         id=r.id, title=r.title, description=r.description, domain=r.domain, language=r.language, status=r.status,
         author=SkillAuthor(id=r.author_id, name=r.author_name), steps_count=r.steps_count,
         guardrails_count=r.guardrails_count, created_at=r.created_at, published_at=r.published_at,
     )
 
 
-async def _detail(r: SkillRecord, user: AuthUser, store: KeyframeStore) -> SkillDetail:
+async def _stats(repo: SessionRepo, user: AuthUser, ids: list[str]) -> dict[str, tuple[int, float | None]]:
+    """Aggregates are a nice-to-have: if they fail the Archives still load, with zeros."""
+    try:
+        return await repo.skill_stats(user, ids)
+    except RepoError:
+        log.exception("could not load skill stats")
+        return {}
+
+
+async def _detail(r: SkillRecord, user: AuthUser, store: KeyframeStore, repo: SessionRepo) -> SkillDetail:
     skill = None
     if r.skill_json:
         try:
@@ -37,7 +48,7 @@ async def _detail(r: SkillRecord, user: AuthUser, store: KeyframeStore) -> Skill
         for s in skill.steps:
             if s.screen_moment:
                 s.screen_moment.keyframe_url = urls.get(s.screen_moment.keyframe_path)
-    return SkillDetail(**_summary(r), skill=skill, skill_md=r.skill_md)
+    return SkillDetail(**_summary(r, await _stats(repo, user, [r.id])), skill=skill, skill_md=r.skill_md)
 
 
 async def _visible(repo: SessionRepo, user: AuthUser, skill_id: str) -> SkillRecord:
@@ -56,6 +67,7 @@ async def list_skills(
     q: str | None = Query(default=None, max_length=100, description="search in title and description"),
     domain: str | None = Query(default=None, max_length=50),
     mine: bool = Query(default=False, description="list your own skills (drafts too) instead of the published ones"),
+    sort: Literal["newest", "popular", "mastery"] = Query(default="newest"),
     user: AuthUser = Depends(current_user),
     repo: SessionRepo = Depends(get_repo),
 ) -> list[SkillSummary]:
@@ -64,7 +76,12 @@ async def list_skills(
     except RepoError:
         log.exception("could not list skills")
         raise HTTPException(502, "storage unavailable")
-    return [SkillSummary(**_summary(r)) for r in rows]
+    stats = await _stats(repo, user, [r.id for r in rows])
+    if sort == "popular":  # stable: ties keep the newest-first order
+        rows = sorted(rows, key=lambda r: -stats.get(r.id, (0, None))[0])
+    elif sort == "mastery":
+        rows = sorted(rows, key=lambda r: -(stats.get(r.id, (0, None))[1] or -1.0))
+    return [SkillSummary(**_summary(r, stats)) for r in rows]
 
 
 @router.get("/skills/{skill_id}", response_model=SkillDetail)
@@ -72,7 +89,7 @@ async def get_skill(
     skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
     store: KeyframeStore = Depends(get_keyframes),
 ) -> SkillDetail:
-    return await _detail(await _visible(repo, user, skill_id), user, store)
+    return await _detail(await _visible(repo, user, skill_id), user, store, repo)
 
 
 @router.post("/skills/{skill_id}/publish", response_model=SkillDetail)
@@ -85,7 +102,7 @@ async def publish_skill(
     if rec.author_id != user.id:
         raise HTTPException(403, "only the author can publish this skill")
     if rec.status == "published":
-        return await _detail(rec, user, store)
+        return await _detail(rec, user, store, repo)
     if not rec.skill_json or rec.steps_count < 1 or not rec.skill_md:
         raise HTTPException(409, "this skill has no steps yet: finish the teach-back first")
     rec.status = "published"
@@ -95,7 +112,27 @@ async def publish_skill(
     except RepoError:
         log.exception("could not publish skill")
         raise HTTPException(502, "storage unavailable")
-    return await _detail(rec, user, store)
+    return await _detail(rec, user, store, repo)
+
+
+@router.post("/skills/{skill_id}/unpublish", response_model=SkillDetail)
+async def unpublish_skill(
+    skill_id: str, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo),
+    store: KeyframeStore = Depends(get_keyframes),
+) -> SkillDetail:
+    """Author only: back to draft, gone from the Archives. Learn sessions already started keep working."""
+    rec = await _visible(repo, user, skill_id)
+    if rec.author_id != user.id:
+        raise HTTPException(403, "only the author can unpublish this skill")
+    if rec.status != "draft":
+        rec.status = "draft"
+        rec.published_at = None
+        try:
+            await repo.save_skill(user, rec)
+        except RepoError:
+            log.exception("could not unpublish skill")
+            raise HTTPException(502, "storage unavailable")
+    return await _detail(rec, user, store, repo)
 
 
 @router.get("/skills/{skill_id}/export", response_class=PlainTextResponse)

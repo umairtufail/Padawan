@@ -120,3 +120,16 @@ class MasteryReport(BaseModel):
     practise_next: list[PracticeItem]  # worst first
     summary: str  # 2 to 3 sentences
     summary_source: Literal["model", "fallback", "none"]
+
+
+class LearnSessionListItem(BaseModel):
+    """One row of the caller's learn history."""
+
+    session_id: str
+    skill_id: str | None
+    skill_title: str
+    created_at: datetime
+    finished: bool
+    mastery_score: float | None = None
+    steps_total: int = 0
+    steps_done: int = 0

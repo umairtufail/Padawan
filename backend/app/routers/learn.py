@@ -9,7 +9,7 @@ from ..auth import AuthUser, current_user
 from ..repo import RepoError, SessionRecord, SessionRepo, get_repo
 from ..schemas import FrameResponse, SkillJson
 from ..schemas_learn import (
-    GuardrailVerdict, LearnFrameResponse, LearnSessionCreate, LearnSessionOut, MasteryReport, PredictionIn,
+    GuardrailVerdict, LearnFrameResponse, LearnSessionCreate, LearnSessionListItem, LearnSessionOut, MasteryReport, PredictionIn,
     PredictionOut, PredictionResult,
 )
 from ..services import guardrail_checker, learn
@@ -95,6 +95,25 @@ async def _save(repo: SessionRepo, user: AuthUser, rec: SessionRecord, st: Learn
         log.exception("could not store learn progress")
 
 
+@router.get("/learn/sessions", response_model=list[LearnSessionListItem])
+async def list_learn_sessions(
+    user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
+) -> list[LearnSessionListItem]:
+    """The caller's own learn history, newest first. Nobody else's sessions, ever."""
+    try:
+        rows = await repo.list_learn_sessions(user)
+    except RepoError:
+        raise _storage_error()
+    return [
+        LearnSessionListItem(
+            session_id=r.id, skill_id=r.skill_id, skill_title=r.skill_title or r.title, created_at=r.created_at,
+            finished=r.status == "done", mastery_score=r.mastery_score if r.status == "done" else None,
+            steps_total=r.steps_total, steps_done=min(r.steps_done, r.steps_total) if r.steps_total else r.steps_done,
+        )
+        for r in rows
+    ]
+
+
 @router.post("/learn/sessions", response_model=LearnSessionOut, status_code=201)
 async def create_learn_session(
     body: LearnSessionCreate, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
@@ -104,7 +123,9 @@ async def create_learn_session(
         skill_rec = await repo.get_skill(user, body.skill_id)
     except RepoError:
         raise _storage_error()
-    if skill_rec is None:
+    # A learner keeps read access to a skill they started after it is unpublished (so old sessions work),
+    # but nobody starts a NEW session on a draft that is not their own.
+    if skill_rec is None or (skill_rec.status != "published" and skill_rec.author_id != user.id):
         raise HTTPException(404, "skill not found")
     if not skill_rec.skill_json:
         raise HTTPException(409, "this skill has no steps yet")
@@ -282,7 +303,7 @@ async def finish_learning(
     rec, skill = await load_learn_session(repo, user, session_id)
     report = await _report(rec, skill, user, repo, summarize, True)
     try:
-        await repo.set_session_state(user, session_id, status="done")
+        await repo.set_session_state(user, session_id, status="done", mastery_score=report.mastery_score)
     except RepoError:
         raise _storage_error()
     return report
