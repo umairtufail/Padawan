@@ -8,6 +8,10 @@ export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:800
 export const MOCK = process.env.NEXT_PUBLIC_API_MOCK === "1";
 
 import { AUTH_MODE, supabase } from "./supabase";
+import { seedSkills } from "./skills-mock";
+import { skillToMarkdown, toSummary, type SkillDetail, type SkillStatus, type SkillSummary } from "./skills";
+
+export type { SkillDetail, SkillSummary, SkillJson, SkillStep, SkillGuardrail } from "./skills";
 
 const TOKEN_KEY = "padawan_token";
 const USER_KEY = "padawan_user";
@@ -149,7 +153,7 @@ function handleUnauthorized() {
 
 // ---------- low-level request ----------
 
-async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: boolean } = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: boolean; text?: boolean } = {}): Promise<T> {
   const auth = opts.auth !== false;
   const headers = new Headers(init.headers);
   if (auth) await syncSupabaseToken();
@@ -174,6 +178,7 @@ async function request<T>(path: string, init: RequestInit = {}, opts: { auth?: b
     if (res.status === 401 && auth) handleUnauthorized();
     throw new ApiError(res.status, detail);
   }
+  if (opts.text) return (await res.text()) as T;
   return (await res.json()) as T;
 }
 
@@ -347,4 +352,85 @@ export async function sendFrame(sessionId: string, tMs: number, frame: Blob): Pr
   form.append("t_ms", String(Math.round(tMs)));
   form.append("frame", frame, "frame.jpg");
   return request(`/v1/sessions/${encodeURIComponent(sessionId)}/frames`, { method: "POST", body: form });
+}
+
+// ---------- skills (Holocrons) ----------
+// Backend contract (assumed until the Skills API lands, see docs/frontend-integration.md):
+//   GET  /v1/skills?status=published|draft   -> SkillSummary[]  (published: everyone; draft: only the caller's own)
+//   GET  /v1/skills/{id}                     -> SkillDetail (the skill JSON from Notion page 03 plus status fields)
+//   POST /v1/skills/{id}/publish             -> SkillDetail (author only)
+//   GET  /v1/skills/{id}/export              -> SKILL.md as text/markdown
+
+const MOCK_SKILLS_KEY = "padawan_mock_skills";
+
+function mockSkills(): SkillDetail[] {
+  const g = globalThis as unknown as { __padawanMockSkills?: SkillDetail[] };
+  if (!g.__padawanMockSkills && hasStorage()) {
+    try {
+      const raw = window.localStorage.getItem(MOCK_SKILLS_KEY);
+      if (raw) g.__padawanMockSkills = JSON.parse(raw) as SkillDetail[];
+    } catch {
+      /* ignore corrupt mock data */
+    }
+  }
+  if (!g.__padawanMockSkills) g.__padawanMockSkills = seedSkills();
+  return g.__padawanMockSkills;
+}
+
+function mockSkillsSave() {
+  if (!hasStorage()) return;
+  try {
+    window.localStorage.setItem(MOCK_SKILLS_KEY, JSON.stringify(mockSkills()));
+  } catch {
+    /* ignore */
+  }
+}
+
+function mockFindSkill(id: string): SkillDetail {
+  const s = mockSkills().find((x) => x.id === id);
+  if (!s) throw new ApiError(404, "skill not found");
+  return s;
+}
+
+export async function listSkills(status: SkillStatus = "published"): Promise<SkillSummary[]> {
+  if (MOCK) {
+    await sleep(250);
+    mockRequireToken();
+    return mockSkills().filter((s) => s.status === status).map(toSummary);
+  }
+  return request(`/v1/skills?status=${status}`);
+}
+
+export async function getSkill(id: string): Promise<SkillDetail> {
+  if (MOCK) {
+    await sleep(150);
+    mockRequireToken();
+    return structuredClone(mockFindSkill(id));
+  }
+  return request(`/v1/skills/${encodeURIComponent(id)}`);
+}
+
+export async function publishSkill(id: string): Promise<SkillDetail> {
+  if (MOCK) {
+    await sleep(300);
+    mockRequireToken();
+    const s = mockFindSkill(id);
+    if (s.status !== "published") {
+      s.status = "published";
+      s.published_at = new Date().toISOString();
+      mockSkillsSave();
+    }
+    return structuredClone(s);
+  }
+  return request(`/v1/skills/${encodeURIComponent(id)}/publish`, { method: "POST" });
+}
+
+/** SKILL.md text for a skill (what an agent loads). */
+export async function exportSkill(id: string): Promise<string> {
+  if (MOCK) {
+    await sleep(150);
+    mockRequireToken();
+    return skillToMarkdown(mockFindSkill(id));
+  }
+  return request(`/v1/skills/${encodeURIComponent(id)}/export`, {}, { text: true });
 }

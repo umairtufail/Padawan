@@ -178,3 +178,14 @@ cd backend
 uv run pytest            # offline, fast (the vision model is faked)
 uv run pytest -m live    # calls Nebius with a real frame
 ```
+
+## 9. Skills (Holocrons): what the frontend expects
+
+The Holocron view (`/dashboard/skills/[id]`) and the Jedi Archives (`/dashboard/skills`) use these calls from `frontend/lib/api.ts`. **Until the backend ships them, `NEXT_PUBLIC_API_MOCK=1` serves sample data** (two published skills and one draft; publishing a draft in mock mode is kept in localStorage). This is what the frontend assumes, tell us if the backend differs:
+
+- `GET /v1/skills?status=published|draft` returns `[{id, title, description, domain, language, status, author: {id, name}, steps_count, guardrails_count, created_at, published_at}]`. `published` lists every published skill, `draft` only the caller's own.
+- `GET /v1/skills/{id}` returns the skill JSON from Notion page 03 (`id, title, description, author, created_at, language, steps[], global_guardrails[], teachback`) plus `status, domain, steps_count, guardrails_count, published_at`.
+- `POST /v1/skills/{id}/publish` (author only) returns the same detail with `status: "published"`.
+- `GET /v1/skills/{id}/export` returns the rendered SKILL.md as plain text.
+- Keyframe images are not shown yet (private storage with signed URLs): a step shows the timestamp and the `screen_moment.description`.
+- "Start learning" links to `/dashboard/learn/{id}`, which is not built yet.
