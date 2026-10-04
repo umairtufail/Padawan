@@ -16,7 +16,7 @@ Code: `frontend/lib/supabase.ts`, `frontend/lib/api.ts` (`loginWithSupabase`, `s
 ## 1. Supabase dashboard (project `reuueppvukwdiytfxezj`)
 - [ ] **Authentication, Users, Add user** (or Invite): create the team's accounts with an email and a password they choose. Tick "Auto Confirm User" when you set the password yourself.
 - [ ] **Authentication, Sign In / Providers**: turn **off "Allow new users to sign up"**. The publishable key is public by design, so while sign-ups are on, anyone can register through the API and then use our backend.
-- [ ] **Authentication, URL Configuration**: set **Site URL** to `https://padawan-bay.vercel.app` (confirmation and reset emails link there; the default is `http://localhost:3000`) and add `http://localhost:3000` to the redirect URLs.
+- [ ] **Authentication, URL Configuration**: set **Site URL** to `https://padawan-bay.vercel.app` (confirmation and reset emails link there; the default is `http://localhost:3000`) and add `http://localhost:3000` to the redirect URLs. The app handles the confirmation link itself: it reads the session from the URL and sends the person to `/dashboard`.
 - [ ] Optional: **Confirm email** stays on if people sign up themselves; off if you only create accounts by hand.
 
 ## 2. Turn it on
