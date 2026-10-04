@@ -109,6 +109,7 @@ export default function LearnSession({ session, stream, onAgain }: Props) {
         setReport(r);
         setReplay(null);
         if (speak) convo.tell(reportMessage(r), mockReportSpeech(r));
+        else void convo.stop();
       } catch (err) {
         finishedRef.current = false;
         setError(err instanceof Error ? err.message : "Could not finish the lesson.");
@@ -205,6 +206,7 @@ export default function LearnSession({ session, stream, onAgain }: Props) {
             />
             <ScreenCapture
               embedded
+              onStopped={() => void convo.stop()}
               showCaptures={false}
               initialStream={stream}
               onFrame={pushFrame}

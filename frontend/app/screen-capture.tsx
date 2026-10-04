@@ -87,13 +87,17 @@ type ScreenCaptureProps = {
   stats?: ReactNode;
   /** Show the strip of captured thumbnails under the recorder. The session page shows a richer timeline instead. */
   showCaptures?: boolean;
+  /** Called when the person stops recording (button) or the browser ends the share. Not called when the page unmounts. */
+  onStopped?: () => void;
 };
 
-export default function ScreenCapture({ onFrame, initialStream = null, embedded = false, stats, showCaptures = true }: ScreenCaptureProps = {}) {
+export default function ScreenCapture({ onFrame, initialStream = null, embedded = false, stats, showCaptures = true, onStopped }: ScreenCaptureProps = {}) {
   const onFrameRef = useRef(onFrame);
+  const onStoppedRef = useRef(onStopped);
   useEffect(() => {
     onFrameRef.current = onFrame;
-  }, [onFrame]);
+    onStoppedRef.current = onStopped;
+  }, [onFrame, onStopped]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const comparisonCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -138,6 +142,7 @@ export default function ScreenCapture({ onFrame, initialStream = null, embedded 
     setSourceName("No source selected");
     setCaptureSafeMode(false);
     setStatus("stopped");
+    onStoppedRef.current?.();
   }, []);
 
   /** Starts monitoring a stream (from the picker below, or handed over by the Start button). */
