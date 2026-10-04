@@ -79,7 +79,11 @@ async def test_debrief_and_tutor_modes():
         t = (await c.post("/v1/voice/sessions", json={"session_id": sid, "mode": "tutor"})).json()
     assert d["agent_id"] == "agent_interviewer" and d["dynamic_variables"]["mode"] == "debrief"
     assert t["agent_id"] == "agent_tutor"
-    assert set(t["dynamic_variables"]) == {"task_title", "skill_md", "expert"}
+    # the original three fields keep their meaning, learn-mode fields were added (defaults for a non-learn session)
+    assert set(t["dynamic_variables"]) == {
+        "task_title", "skill_md", "expert", "skill_steps", "skill_guardrails", "current_step", "current_step_idx",
+    }
+    assert t["dynamic_variables"]["skill_md"] == "(no skill loaded)" and t["dynamic_variables"]["expert"] == "the Master"
 
 
 async def test_unknown_session_is_404_and_no_call_is_made():

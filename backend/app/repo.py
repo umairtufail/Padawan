@@ -33,6 +33,7 @@ class SessionRecord:
     events_count: int = 0
     skill_id: str | None = None
     status: str = "live"
+    kind: str = "teach"  # teach | learn
 
 
 @dataclass
@@ -53,12 +54,21 @@ class SkillRecord:
     published_at: datetime | None = None
 
 
+ATTEMPT_DEFAULTS = {
+    "predicted": None, "actual": None, "correct": None, "intervened": False, "guardrail_id": None,
+    "interventions": 0, "warnings": 0, "started_ms": None, "duration_ms": None,
+}
+ATTEMPT_COLS = "step_idx,predicted,actual,correct,intervened,guardrail_id,interventions,warnings,started_ms,duration_ms"
+
+
 def _dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
 class SessionRepo(Protocol):
-    async def create_session(self, user: AuthUser, title: str, description: str, language: str) -> SessionRecord: ...
+    async def create_session(
+        self, user: AuthUser, title: str, description: str, language: str, *, kind: str = "teach", skill_id: str | None = None
+    ) -> SessionRecord: ...
 
     async def get_session(self, user: AuthUser, session_id: str) -> SessionRecord | None: ...
 
@@ -113,6 +123,16 @@ class SessionRepo(Protocol):
 
     async def set_session_state(self, user: AuthUser, session_id: str, *, status: str | None = None, skill_id: str | None = None) -> None: ...
 
+    # learn mode: one row per (learn session, skill step)
+    async def upsert_attempt(self, user: AuthUser, session_id: str, skill_id: str, step_idx: int, fields: dict) -> None:
+        """Create or update the row for this step. Only the given fields change.
+        fields: predicted, actual, correct, intervened, guardrail_id, interventions, warnings, started_ms, duration_ms."""
+        ...
+
+    async def list_attempts(self, user: AuthUser, session_id: str) -> list[dict]:
+        """Rows {step_idx, predicted, actual, correct, intervened, guardrail_id, interventions, warnings, started_ms, duration_ms} by step_idx."""
+        ...
+
     # skills
     async def author_name(self, user: AuthUser) -> str: ...
 
@@ -142,6 +162,7 @@ class MemoryRepo:
         self._questions: dict[str, dict] = {}
         self._steps: dict[str, dict[int, dict]] = {}
         self._skills: dict[str, SkillRecord] = {}
+        self._attempts: dict[tuple[str, int], dict] = {}
 
     def clear(self) -> None:
         self._sessions.clear()
@@ -152,6 +173,7 @@ class MemoryRepo:
         self._questions.clear()
         self._steps.clear()
         self._skills.clear()
+        self._attempts.clear()
 
     def _owns(self, user, session_id) -> bool:
         rec = self._sessions.get(session_id)
@@ -223,6 +245,17 @@ class MemoryRepo:
         if skill_id is not None:
             rec.skill_id = skill_id
 
+    async def upsert_attempt(self, user, session_id, skill_id, step_idx, fields) -> None:
+        if not self._owns(user, session_id):
+            raise RepoError("session not found")
+        row = self._attempts.setdefault((session_id, step_idx), {"step_idx": step_idx, **ATTEMPT_DEFAULTS})
+        row.update(fields)
+
+    async def list_attempts(self, user, session_id) -> list[dict]:
+        if not self._owns(user, session_id):
+            return []
+        return [dict(r) for (sid, _), r in sorted(self._attempts.items(), key=lambda kv: kv[0][1]) if sid == session_id]
+
     async def author_name(self, user) -> str:
         return {"admin": "Admin", "dev-user": "Dev"}.get(user.id, user.id)
 
@@ -247,10 +280,10 @@ class MemoryRepo:
             rows = [s for s in rows if needle in s.title.lower() or needle in s.description.lower()]
         return sorted(rows, key=lambda s: s.published_at or s.created_at, reverse=True)
 
-    async def create_session(self, user, title, description, language) -> SessionRecord:
+    async def create_session(self, user, title, description, language, *, kind="teach", skill_id=None) -> SessionRecord:
         rec = SessionRecord(
             id=str(uuid.uuid4()), user_id=user.id, title=title, description=description,
-            language=language, created_at=datetime.now(timezone.utc),
+            language=language, created_at=datetime.now(timezone.utc), kind=kind, skill_id=skill_id,
         )
         self._sessions[rec.id] = rec
         return rec
@@ -270,7 +303,7 @@ class MemoryRepo:
         return ids
 
     async def list_sessions(self, user) -> list[SessionRecord]:
-        mine = [r for r in self._sessions.values() if r.user_id == user.id]
+        mine = [r for r in self._sessions.values() if r.user_id == user.id and r.kind == "teach"]
         for r in mine:
             r.events_count = sum(1 for e in self._events if e["session_id"] == r.id)
         return sorted(mine, key=lambda r: r.created_at, reverse=True)
@@ -312,10 +345,12 @@ class SupabaseRepo:
             raise RepoError(f"supabase {method} {path} -> {r.status_code}: {r.text[:200]}")
         return r.json() if returning and r.content else []
 
-    async def create_session(self, user, title, description, language) -> SessionRecord:
+    async def create_session(self, user, title, description, language, *, kind="teach", skill_id=None) -> SessionRecord:
+        body = {"user_id": user.id, "kind": kind, "title": title}
+        if skill_id:
+            body["skill_id"] = skill_id
         rows = await self._send(
-            "POST", "/sessions?select=id,user_id,title,started_at", user, returning=True,
-            json={"user_id": user.id, "kind": "teach", "title": title},
+            "POST", "/sessions?select=id,user_id,title,started_at", user, returning=True, json=body,
         )
         if not rows:
             raise RepoError("session was not created")
@@ -323,6 +358,7 @@ class SupabaseRepo:
         return SessionRecord(
             id=r["id"], user_id=r["user_id"], title=r["title"] or title,
             created_at=datetime.fromisoformat(r["started_at"]), description=description, language=language,
+            kind=kind, skill_id=skill_id,
         )
 
     async def get_session(self, user, session_id) -> SessionRecord | None:
@@ -331,7 +367,7 @@ class SupabaseRepo:
         except ValueError:
             return None
         rows = await self._send(
-            "GET", f"/sessions?id=eq.{session_id}&select=id,user_id,title,last_screen_summary,started_at,skill_id,status&limit=1",
+            "GET", f"/sessions?id=eq.{session_id}&select=id,user_id,title,last_screen_summary,started_at,skill_id,status,kind&limit=1",
             user, returning=True,
         )
         if not rows:  # not found, or row-level security hides it because it is not the user's
@@ -340,7 +376,7 @@ class SupabaseRepo:
         return SessionRecord(
             id=r["id"], user_id=r["user_id"], title=r["title"] or "",
             created_at=datetime.fromisoformat(r["started_at"]), last_summary=r["last_screen_summary"] or "",
-            skill_id=r.get("skill_id"), status=r.get("status") or "live",
+            skill_id=r.get("skill_id"), status=r.get("status") or "live", kind=r.get("kind") or "teach",
         )
 
     async def save_frame_result(self, user, session_id, t_ms, summary, events) -> list[int]:
@@ -367,7 +403,7 @@ class SupabaseRepo:
     async def list_sessions(self, user) -> list[SessionRecord]:
         rows = await self._send(
             "GET",
-            "/sessions?select=id,user_id,title,last_screen_summary,started_at,events(count)&order=started_at.desc&limit=100",
+            "/sessions?kind=eq.teach&select=id,user_id,title,last_screen_summary,started_at,events(count)&order=started_at.desc&limit=100",
             user, returning=True,
         )
         out = []
@@ -507,6 +543,23 @@ class SupabaseRepo:
         patch = {k: v for k, v in (("status", status), ("skill_id", skill_id)) if v is not None}
         if patch and self._check_uuid(session_id):
             await self._send("PATCH", f"/sessions?id=eq.{session_id}", user, json=patch)
+
+    async def upsert_attempt(self, user, session_id, skill_id, step_idx, fields) -> None:
+        if not (self._check_uuid(session_id) and self._check_uuid(skill_id)):
+            raise RepoError("bad id")
+        row = {"session_id": session_id, "learner_id": user.id, "skill_id": skill_id, "step_idx": step_idx, **fields}
+        await self._send(
+            "POST", "/learn_attempts?on_conflict=session_id,step_idx",
+            user, prefer="resolution=merge-duplicates,return=minimal", json=row,
+        )
+
+    async def list_attempts(self, user, session_id) -> list[dict]:
+        if not self._check_uuid(session_id):
+            return []
+        return await self._send(
+            "GET", f"/learn_attempts?session_id=eq.{session_id}&select={ATTEMPT_COLS}&order=step_idx.asc",
+            user, returning=True,
+        )
 
     async def author_name(self, user) -> str:
         rows = await self._send("GET", f"/profiles?id=eq.{user.id}&select=display_name&limit=1", user, returning=True)

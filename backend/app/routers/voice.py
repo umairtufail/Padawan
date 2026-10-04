@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from ..auth import AuthUser, current_user
 from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
-from ..services import elevenlabs
+from ..schemas import SkillJson
+from ..services import elevenlabs, learn
 from .sessions import _summaries
 
 log = logging.getLogger("padawan.voice")
@@ -54,8 +55,12 @@ async def start_voice_session(
     summary = _summaries.get(session.id, session.last_summary)
     if body.mode == "tutor":
         agent_id = settings.elevenlabs_tutor_agent_id
-        # skill_md and expert come from the skills tables once they exist (not built yet).
-        variables = {"task_title": session.title, "skill_md": "(no skill loaded)", "expert": "the Master"}
+        variables = {
+            "task_title": session.title, "skill_md": "(no skill loaded)", "expert": "the Master",
+            "skill_steps": "(none)", "skill_guardrails": "(none)", "current_step": "(none)", "current_step_idx": "0",
+        }
+        if session.kind == "learn":
+            variables.update(await _tutor_variables(repo, user, session))
     else:
         agent_id = settings.elevenlabs_interviewer_agent_id
         variables = {
@@ -72,3 +77,23 @@ async def start_voice_session(
         log.error("voice session failed: %s", e)
         raise HTTPException(502, "voice service unavailable")
     return VoiceSessionResponse(signed_url=url, agent_id=agent_id, dynamic_variables=variables)
+
+
+async def _tutor_variables(repo: SessionRepo, user: AuthUser, session) -> dict[str, str]:
+    """The Holocron for a learn session: skill_md, the expert's name, steps, guardrails and the current step."""
+    try:
+        rec = await repo.get_skill(user, session.skill_id) if session.skill_id else None
+    except RepoError:
+        log.exception("could not load skill")
+        raise HTTPException(502, "storage unavailable")
+    if rec is None or not rec.skill_json:
+        return {}
+    try:
+        skill = SkillJson(**rec.skill_json)
+    except Exception:
+        return {}
+    st = learn._states.get(session.id)
+    out = learn.tutor_context(skill, st.current_idx if st else (skill.steps[0].idx if skill.steps else 0))
+    out["skill_md"] = rec.skill_md or "(no skill loaded)"
+    out["expert"] = rec.author_name or "the Master"
+    return out

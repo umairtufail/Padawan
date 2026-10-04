@@ -34,7 +34,7 @@ async def _owned_session(repo: SessionRepo, user: AuthUser, session_id: str) -> 
     except RepoError:
         log.exception("could not load session")
         raise HTTPException(502, "storage unavailable")
-    if rec is None:
+    if rec is None or rec.kind != "teach":  # learn sessions have their own endpoints (/v1/learn)
         raise HTTPException(404, "session not found")
     return rec
 
