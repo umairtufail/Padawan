@@ -22,9 +22,12 @@ PROMPTS = Path(__file__).resolve().parent.parent / "app" / "prompts"
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 # Stock premade voice, old and calm ("Bill - Wise, Mature, Balanced"). Not a character voice.
-VOICE_ID = "pqHfZKP75CvOlQylNhV4"
+VOICE_ID = "EGMW2itgJSj5DZQUUGwo"
 TTS_MODEL = "eleven_v3_conversational"  # supports Expressive Mode
 LLM = "gemini-2.5-flash"  # fast; change here if latency or quality needs it
+# Ignore voices in the background (other people, TV) so they do not count as the speaker's turn.
+# Reported to mute the speaker's own voice on speakerphone setups: use headphones, or set False.
+BACKGROUND_VOICE_DETECTION = True
 
 
 def _str(desc: str) -> dict:
@@ -116,6 +119,7 @@ def agent_body(name: str, prompt_file: str, first_message: str, tool_ids: list[s
             },
             # Patient turn-taking: the app drives questions, the agent must not jump in.
             "turn": {"turn_eagerness": "patient"},
+            "vad": {"background_voice_detection": BACKGROUND_VOICE_DETECTION},
             "conversation": {
                 "max_duration_seconds": 3600,
                 "client_events": [
@@ -203,7 +207,7 @@ def main() -> int:
             ), settings.elevenlabs_interviewer_agent_id)
             tutor = upsert_agent(c, agent_body(
                 "Yoda (Tutor)", "tutor.system.md",
-                "Greetings, Padawan. {{expert}} taught me {{task_title}}. Ready to learn, are you?",
+                "Greetings, Padawan. {{expert}} taught me {{task_title}}. Are you ready to learn?",
                 [tools[n] for n in TUTOR_TOOLS], TUTOR_VARS,
             ), settings.elevenlabs_tutor_agent_id)
     except httpx.HTTPStatusError as e:
