@@ -35,12 +35,12 @@ describe("PauseController.evaluate", () => {
     if (d.kind === "ask") expect(d.candidate.id).toBe("a");
   });
 
-  it("waits while the screen changed less than 2 s ago, and asks once it has been idle 2 s", () => {
+  it("waits while the screen changed less than 3 s ago, and asks once it has been idle 3 s", () => {
     const c = ready();
-    const early = c.evaluate(T0 + 1999, calm());
+    const early = c.evaluate(T0 + 2999, calm());
     expect(early.kind).toBe("wait");
     if (early.kind === "wait") expect(early.blockers).toEqual(["screen_idle"]);
-    expect(c.evaluate(T0 + 2000, calm()).kind).toBe("ask");
+    expect(c.evaluate(T0 + 3000, calm()).kind).toBe("ask");
   });
 
   it("waits when there has been no frame yet", () => {
@@ -82,23 +82,23 @@ describe("PauseController.evaluate", () => {
 });
 
 describe("question budget", () => {
-  it("keeps 60 s between two questions", () => {
+  it("keeps 25 s between two questions", () => {
     const c = new PauseController();
     c.enqueue(q("a"), T0);
     c.enqueue(q("b"), T0);
     const first = c.evaluate(NOW, calm());
     expect(first.kind).toBe("ask");
     if (first.kind === "ask") c.recordAsk(first.candidate, NOW);
-    const soon = c.evaluate(NOW + 59_999, calm({ lastFrameChangeAt: T0 }));
+    const soon = c.evaluate(NOW + 24_999, calm({ lastFrameChangeAt: T0 }));
     expect(soon.kind === "wait" && soon.blockers).toEqual(["gap"]);
-    expect(c.evaluate(NOW + 60_000, calm()).kind).toBe("ask");
+    expect(c.evaluate(NOW + 25_000, calm()).kind).toBe("ask");
   });
 
-  it("allows at most 5 questions per 10 minutes, then frees a slot", () => {
-    const c = new PauseController({ minGapMs: 1000 });
+  it("allows at most 12 questions per 10 minutes, then frees a slot", () => {
+    const c = new PauseController({ minGapMs: 1000, maxQueue: 20 });
     let t = T0;
-    for (let i = 0; i < 6; i++) c.enqueue(q(`q${i}`), t);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 13; i++) c.enqueue(q(`q${i}`), t);
+    for (let i = 0; i < 12; i++) {
       t += 5000;
       const d = c.evaluate(t, calm());
       expect(d.kind).toBe("ask");

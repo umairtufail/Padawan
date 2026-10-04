@@ -67,3 +67,20 @@ export class UpdateThrottle {
     return true;
   }
 }
+
+/**
+ * Questions Yoda may ask on his own when nothing salient happened and the queue is empty: he is a curious apprentice,
+ * so he keeps asking what the Master is doing and why. Rotated so he never repeats the same one.
+ */
+const CURIOSITY = [
+  "What are you doing right now, and why?",
+  "Why this step, and not another way?",
+  "What could go wrong here?",
+  "When would you stop and ask someone before going on?",
+  "What do you check before you go on?",
+  "What would a new colleague get wrong here?",
+];
+
+export function curiosityQuestion(n: number): string {
+  return CURIOSITY[n % CURIOSITY.length];
+}

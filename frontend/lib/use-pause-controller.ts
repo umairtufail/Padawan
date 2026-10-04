@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FrameResponse } from "./api";
 import { PauseController, type Check, type PauseConfig, type QuestionCandidate } from "./pause-controller";
-import { questionsForResponse, screenUpdateText, UpdateThrottle } from "./question-source";
+import { curiosityQuestion, questionsForResponse, screenUpdateText, UpdateThrottle } from "./question-source";
 
 export type TraceEntry = {
   id: number;
@@ -32,6 +32,8 @@ type Inputs = {
 };
 
 const TICK_MS = 500;
+/** With nothing queued, a curious Yoda asks his own question after the screen has been quiet this long. */
+const CURIOUS_IDLE_MS = 5000;
 const MAX_TRACE = 40;
 
 /**
@@ -48,6 +50,7 @@ export function usePauseController(inputs: Inputs) {
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const [checks, setChecks] = useState<Check[]>([]);
   const [asked, setAsked] = useState(0);
+  const curious = useRef(0);
 
   useEffect(() => {
     latest.current = inputs;
@@ -91,6 +94,16 @@ export function usePauseController(inputs: Inputs) {
       });
       setChecks(decision.checks);
       setPending(controller.pending(now));
+      // Interactive apprentice: when only "no question waiting" blocks him, ask his own curious question.
+      if (decision.kind === "wait" && decision.blockers.length === 1 && decision.blockers[0] === "candidate") {
+        const idle = s.lastFrameChangeAt === null ? 0 : now - s.lastFrameChangeAt;
+        if (idle >= CURIOUS_IDLE_MS) {
+          const q = curiosityQuestion(curious.current++);
+          controller.enqueue({ id: `curious-${now}`, question: q, priority: -2, source: "stub", type: "reason", anchorEventId: null }, now);
+          log("queued", `Queued (curious): ${q}`);
+          setPending(controller.pending(now));
+        }
+      }
       if (decision.kind === "ask") {
         const c = decision.candidate;
         if (s.ask(c.question)) {
