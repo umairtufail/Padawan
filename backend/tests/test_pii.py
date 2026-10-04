@@ -1,5 +1,5 @@
 import pytest
-from test_frames_endpoint import client, new_session, send
+from .test_frames_endpoint import client, new_session, send
 
 from app.config import settings
 from app.main import app

@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     # Skip a frame if the vision model takes longer than this (shared endpoint has slow outliers).
     vision_timeout_s: float = 8.0
 
+    # Text model for the question planner and the skill synthesizer. Empty = same model as the vision one.
+    nebius_text_model: str = ""
+    # The planner runs inline on salient frames, so it gets a short budget; failure means no candidates.
+    planner_timeout_s: float = 5.0
+    # Synthesis is one big call (plus one retry) and runs when the author confirms the teach-back.
+    synthesis_timeout_s: float = 60.0
+    # Run the step segmenter after this many new events, or this many seconds, whichever comes first.
+    segmenter_every_events: int = 10
+    segmenter_every_s: float = 20.0
+
     # Default is "admin" so a deployment that forgets to set AUTH_MODE is closed, not open.
     # "dev": no login needed, in-memory sessions (local UI work only, never deploy this).
     # "admin": one hardcoded demo account (ADMIN_USER / ADMIN_PASSWORD), token issued by this backend, in-memory sessions.
@@ -40,6 +50,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def text_model() -> str:
+    return settings.nebius_text_model or settings.nebius_vlm_model
 
 
 def security_warnings(cfg: Settings) -> list[str]:
