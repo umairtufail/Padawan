@@ -69,7 +69,7 @@ docs/        guides, start with frontend-integration.md
 AGENTS.md    rules for everyone working here, human or AI
 ```
 
-## Quick start
+## Quick start Guide
 
 You need [uv](https://docs.astral.sh/uv/) (backend) and Node 20+ (frontend).
 
