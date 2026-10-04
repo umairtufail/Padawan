@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from ..auth import AuthUser, current_user
 from ..config import settings
 from ..repo import RepoError, SessionRepo, get_repo
-from ..schemas import Event, FrameResponse, SessionCreate, SessionDetail, SessionOut, SessionSummary, StoredEvent
+from ..schemas import Event, FrameResponse, OffTheRecord, SessionCreate, SessionDetail, SessionOut, SessionSummary, StoredEvent
 from ..services import vision
+from ..services.pii import redact_frame_result
 
 log = logging.getLogger("padawan.sessions")
 router = APIRouter()
@@ -21,6 +22,8 @@ VisionFn = Callable[..., Awaitable[vision.VisionResult]]
 # (With several instances the summary falls back to the database copy, the lock is per instance.)
 _locks: dict[str, asyncio.Lock] = {}
 _summaries: dict[str, str] = {}
+# Sessions the expert took off the record. In-process like the lock (lost on restart, per instance).
+_off_record: set[str] = set()
 
 
 def get_vision() -> VisionFn:
@@ -82,6 +85,21 @@ async def get_session(
     )
 
 
+@router.post("/sessions/{session_id}/off-the-record", response_model=OffTheRecord)
+async def set_off_the_record(
+    session_id: str, body: OffTheRecord, user: AuthUser = Depends(current_user), repo: SessionRepo = Depends(get_repo)
+) -> OffTheRecord:
+    try:
+        session = await repo.get_session(user, session_id)
+    except RepoError:
+        log.exception("could not load session")
+        raise HTTPException(502, "storage unavailable")
+    if session is None:
+        raise HTTPException(404, "session not found")
+    (_off_record.add if body.on else _off_record.discard)(session_id)
+    return body
+
+
 @router.post("/sessions/{session_id}/frames", response_model=FrameResponse)
 async def post_frame(
     session_id: str,
@@ -91,6 +109,9 @@ async def post_frame(
     repo: SessionRepo = Depends(get_repo),
     extract: VisionFn = Depends(get_vision),
 ) -> FrameResponse:
+    if session_id in _off_record:
+        # Checked first: the frame is not read, analysed or stored, and goes nowhere.
+        return FrameResponse(t_ms=t_ms, skipped="off_the_record")
     data = await frame.read()
     if not data:
         raise HTTPException(400, "empty frame")
@@ -131,8 +152,12 @@ async def post_frame(
             # Keep the previous summary so the next frame still has a state to compare against.
             return FrameResponse(t_ms=t_ms, skipped="parse_error", latency_ms=result.latency_ms)
 
+        # Redact personal data before anything is stored, returned or fed back as the next PREVIOUS_SCREEN.
+        summary, clean_events, _ = redact_frame_result(
+            result.screen_summary, [r for r in result.events if isinstance(r, dict)]
+        )
         events: list[Event] = []
-        for raw in result.events:
+        for raw in clean_events:
             try:
                 events.append(Event(id=0, **{k: v for k, v in raw.items() if k != "id"}))
             except Exception:
@@ -140,17 +165,17 @@ async def post_frame(
 
         try:
             ids = await repo.save_frame_result(
-                user, session_id, t_ms, result.screen_summary, [e.model_dump(exclude={"id"}) for e in events]
+                user, session_id, t_ms, summary, [e.model_dump(exclude={"id"}) for e in events]
             )
         except RepoError:
             # Not stored, so the saved summary stays as it was and the next frame compares against that.
             log.exception("could not store the frame result")
             return FrameResponse(t_ms=t_ms, skipped="storage_error", latency_ms=result.latency_ms)
 
-        _summaries[session_id] = result.screen_summary
+        _summaries[session_id] = summary
         for e, event_id in zip(events, ids):
             e.id = event_id
 
         return FrameResponse(
-            t_ms=t_ms, screen_summary=result.screen_summary, events=events, latency_ms=result.latency_ms
+            t_ms=t_ms, screen_summary=summary, events=events, latency_ms=result.latency_ms
         )

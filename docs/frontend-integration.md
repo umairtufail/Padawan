@@ -94,7 +94,9 @@ Wrong credentials return `401 {"detail": "invalid credentials"}`. Send the token
 
 - `events` is empty when nothing changed. That is normal and common.
 - `question_candidates` and `step_update` are always empty for now (coming next). Keep them in your types.
-- **`skipped`** is `null` when the frame was analysed. Otherwise it is one of `busy`, `timeout`, `vision_error`, `parse_error`, `storage_error`. Just carry on with the next frame, nothing to retry and nothing to show the user.
+- **`skipped`** is `null` when the frame was analysed. Otherwise it is one of `busy`, `timeout`, `vision_error`, `parse_error`, `storage_error`, `off_the_record`. Just carry on with the next frame, nothing to retry and nothing to show the user.
+- **Redaction.** `screen_summary`, event `summary`, `entities` and `visible_text` are redacted on the backend before they are stored or returned: emails, IBANs (mod 97 checked), card numbers (Luhn checked), phone numbers and names after a cue (`Herr`, `Mr.`, `Customer:`) become `[EMAIL]`, `[IBAN]`, `[CARD]`, `[PHONE]`, `[NAME]`. Invoice numbers and cost centers stay. Not a guarantee: free-form names and addresses can slip through.
+- **Off the record.** `POST /v1/sessions/{id}/off-the-record` with `{"on": true}` (or `false`) returns `{"on": ...}`. While on, every frame returns `skipped: "off_the_record"`, is not analysed or stored, and is not sent to any model. The client should also stop capturing and mute the mic while it is on. The flag is held in server memory (lost on restart, per instance, not yet persisted); re-send it after a reconnect.
 - Errors: `401` missing or invalid token (supabase mode), `404` unknown session or someone else's, `400` empty frame, `413` frame over 4 MB, `502` storage unavailable.
 
 ## 4. Rules for the browser
@@ -117,7 +119,7 @@ export type FrameResponse = {
   t_ms: number; screen_summary: string; events: PadawanEvent[];
   question_candidates: unknown[]; step_update: unknown | null;
   latency_ms: number | null;
-  skipped: "busy" | "timeout" | "vision_error" | "parse_error" | "storage_error" | null;
+  skipped: "busy" | "timeout" | "vision_error" | "parse_error" | "storage_error" | "off_the_record" | null;
 };
 
 export async function createTeachSession(title: string, token?: string) {
