@@ -46,7 +46,11 @@ class StepUpdate(BaseModel):
     status: Literal["open", "closed"] = "open"
 
 
-SkipReason = Literal["busy", "timeout", "vision_error", "parse_error", "storage_error"]
+SkipReason = Literal["busy", "timeout", "vision_error", "parse_error", "storage_error", "off_the_record"]
+
+
+class OffTheRecord(BaseModel):
+    on: bool
 
 
 class FrameResponse(BaseModel):
